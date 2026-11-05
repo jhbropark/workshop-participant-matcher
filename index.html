@@ -188,7 +188,7 @@
 
       const SHAPES = ['circle','capsule','square','blob','diamond','arch','leaf','pebble','wave','soft','bean','cloud','drop','tilt','slant','notch'];
 
-      const INTERVIEW_TOPICS = [
+      const ONE_ON_ONE_TOPICS = [
         {id:1,title:"나를 사로잡는 것",q1:"최근 나를 오래 머물게 하거나 다시 보게 만든 영상·전시·게임·음악은 무엇인가요?",q2:"어떤 장면이나 표현이 특히 좋았나요? 그때 어떤 감정을 느꼈나요?"},
         {id:2,title:"이 분야를 선택한 이유",q1:"미디어아트·영상·그래픽 분야를 직접 배워보고 싶다고 생각한 계기는 무엇인가요?",q2:"관심을 갖는 데서 그치지 않고, 실제로 시작하게 만든 순간이 있었나요?"},
         {id:3,title:"시간을 잊었던 순간",q1:"시간 가는 줄 모르고 무언가에 몰입했던 경험은 무엇인가요?",q2:"그 과정에서 무엇이 그렇게 재미있었나요? 작품 제작 경험이 아니어도 좋아요."},
@@ -213,6 +213,24 @@
         {id:22,title:"우리 둘이 팀이 된다면 🚀",q1:"지금까지 나눈 이야기를 바탕으로, 우리 둘이 함께 만들면 재미있을 것 같은 프로젝트는 무엇인가요?",q2:"팀 이름은 무엇으로 하고, 각자 어떤 역할을 맡으면 좋을까요?"}
       ];
 
+      const TALK_INTERVIEW_TOPICS = [
+        {id:1,title:"예술은 무엇일까?",q1:"최근에 본 영화·게임·전시·영상 중 예술이라고 느낀 것은 무엇인가요?",q2:"그 경험에서 작품 자체, 공간, 기술, 관객의 참여 중 무엇이 가장 크게 작용했나요?"},
+        {id:2,title:"익숙한 것을 새롭게 보기",q1:"평소 아무 생각 없이 사용하는 물건이나 공간을 작품으로 다시 바라본다면 무엇인가요?",q2:"그것을 낯설게 보이게 만들기 위해 무엇을 바꾸고 싶나요?"},
+        {id:3,title:"미디어가 바꾸는 경험",q1:"같은 이야기를 책, 영화, 게임, 몰입형 공간 중 하나로 옮긴다면 어떤 형식이 가장 잘 맞나요?",q2:"그 형식이어야만 가능한 관객의 행동이나 감정은 무엇인가요?"},
+        {id:4,title:"기술과 예술의 경계",q1:"AI, 카메라, 프로젝터, 센서 같은 기술이 들어간 결과물은 언제 예술이 된다고 생각하나요?",q2:"기술보다 창작자가 먼저 결정해야 할 것은 무엇일까요?"},
+        {id:5,title:"사이를 잇는 매체",q1:"사람과 사람, 기억과 장소, 아이디어와 관객을 이어주는 매체가 있다면 무엇인가요?",q2:"그 연결이 끊기거나 달라지면 어떤 경험이 생길까요?"},
+        {id:6,title:"예술과 기술은 원래 한 팀",q1:"예술과 기술이 분리되지 않았던 시대에 살았다면 어떤 일을 함께 해보고 싶나요?",q2:"내가 가진 다른 분야의 능력을 창작에 연결한다면 무엇인가요?"},
+        {id:7,title:"다빈치식 관찰",q1:"어떤 대상을 오래 관찰하다가 새롭게 알게 된 점이 있나요?",q2:"그 관찰을 이미지, 소리, 공간 중 어떤 방식으로 표현하고 싶나요?"},
+        {id:8,title:"백남준처럼 규칙 바꾸기",q1:"평소 정해진 용도로만 쓰는 기계를 전혀 다른 방식으로 사용한다면 무엇을 고르겠어요?",q2:"그 기계가 관객에게 어떤 행동을 하게 만들면 재미있을까요?"},
+        {id:9,title:"빛과 공간의 기억",q1:"빛, 소리, 날씨, 위치 때문에 특별하게 기억에 남은 공간이 있나요?",q2:"그 공간의 경험을 작품으로 옮긴다면 무엇을 가장 먼저 설계하겠어요?"},
+        {id:10,title:"작은 조각에서 큰 이미지",q1:"작은 요소들이 모여 하나의 큰 장면을 만드는 작품을 만든다면 어떤 단위를 쓰고 싶나요?",q2:"가까이 봤을 때와 멀리 봤을 때 무엇이 다르게 보이면 좋을까요?"},
+        {id:11,title:"관객이 완성하는 작품",q1:"관객이 만지거나 움직이거나 선택해야 완성되는 작품을 만든다면 어떤 참여를 넣고 싶나요?",q2:"관객의 예상 밖 행동이 작품을 어떻게 바꾸면 좋을까요?"},
+        {id:12,title:"나만의 미디어아트 정의",q1:"지금까지 이야기한 것을 바탕으로 미디어아트를 한 문장으로 정의한다면 어떻게 말하겠어요?",q2:"그 정의를 직접 보여줄 수 있는 첫 작품을 만든다면 어떤 장면으로 시작하겠어요?"}
+      ];
+
+      const INTERVIEW_TOPICS = location.hostname === 'talk.varis.kr' ? TALK_INTERVIEW_TOPICS : ONE_ON_ONE_TOPICS;
+      const INTERVIEW_STORAGE_KEY = location.hostname === 'talk.varis.kr' ? 'talk-interview-topics-v1' : '1on1-interview-topics-v1';
+
       let participants = [];
       let mode = 'float';
       let lastTime = performance.now();
@@ -220,7 +238,7 @@
       let matchHistory = new Set();
       let matchPresses = 0;
       let usedInterviewTopics = [];
-      try { const storedTopics = JSON.parse(localStorage.getItem('1on1-interview-topics-v1') || '[]'); if(Array.isArray(storedTopics)) usedInterviewTopics = storedTopics.filter(id=>INTERVIEW_TOPICS.some(topic=>topic.id===id)); } catch(e) {}
+      try { const storedTopics = JSON.parse(localStorage.getItem(INTERVIEW_STORAGE_KEY) || '[]'); if(Array.isArray(storedTopics)) usedInterviewTopics = storedTopics.filter(id=>INTERVIEW_TOPICS.some(topic=>topic.id===id)); } catch(e) {}
       try { const storedPresses = Number(localStorage.getItem('1on1-match-presses')); if(Number.isFinite(storedPresses) && storedPresses >= 0) matchPresses = storedPresses; } catch(e) {}
       try { const raw = localStorage.getItem('1on1-history'); if(raw){ const arr=JSON.parse(raw); if(Array.isArray(arr)) matchHistory=new Set(arr);} } catch(e){}
       const saveHistory = () => { try{ localStorage.setItem('1on1-history', JSON.stringify([...matchHistory])); }catch(e){} updateHistoryUI(); };
@@ -252,7 +270,7 @@
         if(!available.length){ usedInterviewTopics=[]; available=[...INTERVIEW_TOPICS]; }
         const selected = available[Math.floor(Math.random()*available.length)];
         usedInterviewTopics.push(selected.id);
-        try { localStorage.setItem('1on1-interview-topics-v1', JSON.stringify(usedInterviewTopics)); } catch(e) {}
+        try { localStorage.setItem(INTERVIEW_STORAGE_KEY, JSON.stringify(usedInterviewTopics)); } catch(e) {}
         return selected;
       }
 
