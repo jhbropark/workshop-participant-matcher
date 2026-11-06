@@ -43,7 +43,10 @@
       transition:background .25s ease,color .25s ease,opacity .25s ease;
       filter:url(#roughen); user-select:none;
     }
-    .person span{position:relative;z-index:2;font-size:clamp(12px,1.2vw,15px);font-weight:500;letter-spacing:-.025em;white-space:nowrap;}
+    .person-name{position:relative;z-index:2;font-size:clamp(12px,1.2vw,15px);font-weight:500;letter-spacing:-.025em;white-space:nowrap;}
+    .person.has-role{grid-template-rows:auto auto;gap:2px;}
+    .role-label{position:relative;z-index:2;color:var(--muted);font-size:9px;line-height:1.1;letter-spacing:-.02em;text-align:center;white-space:pre-line;}
+    .person.matched-a .role-label{color:rgba(255,255,255,.78);}
     .shape-circle{border-radius:50%; aspect-ratio:1.24/1;}
     .shape-capsule{border-radius:999px 870px 960px 900px / 880px 990px 850px 970px;}
     .shape-square{border-radius:12px 14px 10px 18px;}
@@ -352,13 +355,30 @@
       function createParticipant(name, shapeName, index){
         const el=document.createElement('div');
         el.className=`person shape-${shapeName}`;
-        el.innerHTML=`<span>${escapeHtml(name)}</span>`;
+        el.innerHTML=`<span class="role-label" hidden></span><span class="person-name">${escapeHtml(name)}</span>`;
         floatingLayer.appendChild(el);
         const {width,height}=bounds();
         const node={ id:`${Date.now()}-${index}-${Math.random()}`, name, el, shape:shapeName, x:random(40,Math.max(60,width-150)), y:random(30,Math.max(50,height-110)), vx:random(-46,46)||26, vy:random(-38,38)||-22, targetX:null,targetY:null, rotation:random(-6,6), targetRotation:0, phase:random(0,Math.PI*2), size:{width:100,height:64} };
         el.style.setProperty('--rotation',`${node.rotation}deg`);
         requestAnimationFrame(()=>{ const r=el.getBoundingClientRect(); node.size.width=r.width; node.size.height=r.height; constrainAndBounce(node, true); renderNode(node); });
         return node;
+      }
+      function setInterviewRole(node, role){
+        const label=node.el.querySelector('.role-label');
+        const interviewer=role==='interviewer';
+        label.hidden=false;
+        label.textContent=interviewer?'인터뷰어\n(Interviewer)':'인터뷰이\n(Interviewee)';
+        label.title=interviewer?'질문을 던지고 대화의 방향을 이끄는 사람':'질문에 응답하며 생각, 정보, 경험을 제공하는 사람';
+        label.setAttribute('aria-label',interviewer?'인터뷰어 (Interviewer)':'인터뷰이 (Interviewee)');
+        node.el.classList.add('has-role');
+        node.role=role;
+        const r=node.el.getBoundingClientRect(); node.size.width=r.width; node.size.height=r.height;
+      }
+      function clearInterviewRole(node){
+        const label=node.el.querySelector('.role-label');
+        if(label){ label.hidden=true; label.textContent=''; label.removeAttribute('title'); label.removeAttribute('aria-label'); }
+        node.el.classList.remove('has-role');
+        node.role='';
       }
       function renderNode(node){ node.el.style.setProperty('--x',`${node.x}px`); node.el.style.setProperty('--y',`${node.y}px`); node.el.style.setProperty('--rotation',`${node.rotation}deg`); }
 
@@ -562,15 +582,16 @@
         const {teams}=findPairTeams(pairingPool);
 
         mode='matched'; teamLayer.innerHTML='';
-        participants.forEach(p=>{ p.el.classList.remove('matched-a','matched-b','matched-c','matched-d','waiting'); p.targetX=null; p.targetY=null; });
+        participants.forEach(p=>{ clearInterviewRole(p); p.el.classList.remove('matched-a','matched-b','matched-c','matched-d','waiting'); p.targetX=null; p.targetY=null; });
         const centers=getTeamCenters(teams.length,!!waitingNode);
         teams.forEach((pair,i)=>{
           const a=pair[0], b=pair[1]; const center=centers[i]; const gap=Math.min(34,center.cellW*.08);
+          a.el.classList.add('matched-a'); b.el.classList.add('matched-b');
+          setInterviewRole(a,'interviewer'); setInterviewRole(b,'interviewee');
           const totalW=a.size.width+b.size.width+gap; const left=center.x-totalW/2;
           const yA=center.y-a.size.height/2+random(-3,3); const yB=center.y-b.size.height/2+random(-3,3);
           a.targetX=left; a.targetY=yA; a.targetRotation=random(-2,1);
           b.targetX=left+a.size.width+gap; b.targetY=yB; b.targetRotation=random(-1,2);
-          a.el.classList.add('matched-a'); b.el.classList.add('matched-b');
           matchHistory.add(pairKey(a.name,b.name));
           const card=document.createElement('div'); card.className='team-card'; card.style.left=`${center.x}px`; card.style.top=`${center.y}px`; card.style.setProperty('--team-tilt',`${random(-2.2,2.2)}deg`); card.innerHTML=`<img class="team-walker" alt="" src="data:image/gif;base64,R0lGODlh8ABQAPf/AAAAAB8hJh8iJSAiJiAiJyAjJSAjJiAjJiAjJiAkJCAkJCEjJSEjJiEjJiEjJyEkJiIiKSoqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKgD/ACH/C05FVFNDQVBFMi4wAwEAAAAh+QQJCAD/ACzAAAMAGgA2AAAI/wD/CRw4kICBgwgJEFzIUCBCAQ4cCEDYsOJBBwwZHKy4cCNHjxwNMuD4z4EBhR8NkHSo8qOAlf8mkjSAcaXJmTVJ3nQJU2ZKmCAbGszZUCPK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">`; teamLayer.appendChild(card); requestAnimationFrame(()=>card.classList.add('visible'));
         });
@@ -601,7 +622,7 @@
         const {teams, score}=selected;
 
         mode='matched'; teamLayer.innerHTML='';
-        participants.forEach(p=>{ p.el.classList.remove('matched-a','matched-b','matched-c','matched-d','waiting'); p.targetX=null; p.targetY=null; });
+        participants.forEach(p=>{ clearInterviewRole(p); p.el.classList.remove('matched-a','matched-b','matched-c','matched-d','waiting'); p.targetX=null; p.targetY=null; });
 
         const teamCount=teams.length;
         const centers=getTeamCenters(teamCount,!!waitingNode);
@@ -656,7 +677,8 @@
         mode='float'; teamLayer.innerHTML='';
         const {width,height}=bounds();
         participants.forEach(node=>{
-          node.el.classList.remove('matched-a','matched-b','waiting');
+          clearInterviewRole(node);
+          node.el.classList.remove('matched-a','matched-b','matched-c','matched-d','waiting');
           node.targetX=null; node.targetY=null;
           node.vx=random(-48,48)||28; node.vy=random(-40,40)||-22;
           node.x=Math.max(18,Math.min(width-node.size.width-18,node.x+random(-28,28)));
