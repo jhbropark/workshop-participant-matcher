@@ -76,8 +76,7 @@
     .team-walker{position:absolute;left:var(--walker-start,50%);top:var(--walker-top,50%);z-index:8;width:70px;height:auto;opacity:.86;mix-blend-mode:multiply;animation:walkerToFacilitator .9s cubic-bezier(.2,.75,.2,1) .2s both;pointer-events:none;}
     .app.group-mode .team-card{z-index:2;pointer-events:none;}
     .app.group-mode .team-walker{display:none;}
-    .team-direction-arrow{position:absolute;z-index:3;transform:translate(-50%,-50%);color:var(--ink);font-size:22px;font-weight:600;line-height:1;pointer-events:none;text-shadow:0 1px 0 var(--paper);}
-    .team-direction-arrow[aria-label]{white-space:nowrap;}
+    .team-direction-arrows{position:absolute;inset:0;z-index:3;width:100%;height:100%;overflow:visible;pointer-events:none;color:var(--muted);}
     .topic-panel{position:absolute;left:50%;top:38px;z-index:30;width:min(900px,calc(100vw - 48px));transform:translateX(-50%);display:grid;gap:12px;text-align:center;pointer-events:none;opacity:0;transition:opacity .32s ease;}
     .topic-panel.visible{opacity:1;}
     .topic-panel[hidden]{display:none;}
@@ -658,24 +657,32 @@
           card.setAttribute('aria-label',`${group.length}명 토론 그룹`);
 
           card.querySelector('.team-walker')?.remove();
-          const facilitatorY=facilitator.targetY+facilitator.size.height/2;
-          const leftMembers=group.filter(person=>person!==facilitator && person.targetX+person.size.width/2<facilitator.targetX+facilitator.size.width/2);
-          const rightMembers=group.filter(person=>person!==facilitator && person.targetX+person.size.width/2>facilitator.targetX+facilitator.size.width/2);
-          const addDirectionArrow=(side,members)=>{
-            if(!members.length) return;
-            const arrow=document.createElement('div');
-            const arrowX=side<0
-              ? (Math.max(...members.map(person=>person.targetX+person.size.width))+facilitator.targetX)/2
-              : (facilitator.targetX+facilitator.size.width+Math.min(...members.map(person=>person.targetX)))/2;
-            arrow.className='team-direction-arrow';
-            arrow.textContent=side<0?'→':'←';
-            arrow.setAttribute('aria-label','진행자 방향으로 이동');
-            arrow.style.left=`${Math.round(arrowX)}px`;
-            arrow.style.top=`${Math.round(facilitatorY)}px`;
-            teamLayer.appendChild(arrow);
-          };
-          addDirectionArrow(-1,leftMembers);
-          addDirectionArrow(1,rightMembers);
+          const {width:stageWidth,height:stageHeight}=bounds();
+          const facilitatorCenterX=facilitator.targetX+facilitator.size.width/2;
+          const facilitatorCenterY=facilitator.targetY+facilitator.size.height/2;
+          const arrowSvg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+          const markerId=`facilitator-arrow-${Date.now()}-${i}-${Math.random().toString(36).slice(2,6)}`;
+          arrowSvg.classList.add('team-direction-arrows');
+          arrowSvg.setAttribute('viewBox',`0 0 ${stageWidth} ${stageHeight}`);
+          arrowSvg.setAttribute('aria-label','모든 참여자가 진행자 방향으로 이동');
+          const defs=document.createElementNS('http://www.w3.org/2000/svg','defs');
+          const marker=document.createElementNS('http://www.w3.org/2000/svg','marker');
+          marker.setAttribute('id',markerId); marker.setAttribute('markerWidth','4'); marker.setAttribute('markerHeight','4'); marker.setAttribute('refX','3.5'); marker.setAttribute('refY','2'); marker.setAttribute('orient','auto'); marker.setAttribute('markerUnits','userSpaceOnUse');
+          const markerPath=document.createElementNS('http://www.w3.org/2000/svg','path');
+          markerPath.setAttribute('d','M0,0 L4,2 L0,4 Z'); markerPath.setAttribute('fill','currentColor');
+          marker.appendChild(markerPath); defs.appendChild(marker); arrowSvg.appendChild(defs);
+          group.filter(person=>person!==facilitator).forEach(person=>{
+            const personCenterX=person.targetX+person.size.width/2;
+            const personCenterY=person.targetY+person.size.height/2;
+            const dx=facilitatorCenterX-personCenterX; const dy=facilitatorCenterY-personCenterY;
+            const distance=Math.max(1,Math.hypot(dx,dy)); const ux=dx/distance; const uy=dy/distance;
+            const startPad=Math.min(person.size.width/2-4,distance*.25); const endPad=Math.min(facilitator.size.width/2-4,distance*.25);
+            const line=document.createElementNS('http://www.w3.org/2000/svg','line');
+            line.setAttribute('x1',`${personCenterX+ux*startPad}`); line.setAttribute('y1',`${personCenterY+uy*startPad}`); line.setAttribute('x2',`${facilitatorCenterX-ux*endPad}`); line.setAttribute('y2',`${facilitatorCenterY-uy*endPad}`);
+            line.setAttribute('stroke','currentColor'); line.setAttribute('stroke-width','0.7'); line.setAttribute('stroke-opacity','0.62'); line.setAttribute('fill','none'); line.setAttribute('marker-end',`url(#${markerId})`);
+            arrowSvg.appendChild(line);
+          });
+          teamLayer.appendChild(arrowSvg);
         });
 
         if(waitingNode){
