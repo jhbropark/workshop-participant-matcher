@@ -44,9 +44,8 @@
       filter:url(#roughen); user-select:none;
     }
     .person-name{position:relative;z-index:2;font-size:clamp(12px,1.2vw,15px);font-weight:500;letter-spacing:-.025em;white-space:nowrap;}
-    .person.has-role{grid-template-rows:auto auto;gap:2px;}
-    .role-label{position:relative;z-index:2;color:var(--muted);font-size:9px;line-height:1.1;letter-spacing:-.02em;text-align:center;white-space:pre-line;}
-    .person.matched-a .role-label{color:rgba(255,255,255,.78);}
+    .role-label{position:absolute;left:50%;bottom:calc(100% + 5px);z-index:12;transform:translateX(-50%);padding:2px 5px;background:var(--paper);color:var(--ink);font-size:10px;line-height:1.2;letter-spacing:-.02em;text-align:center;white-space:nowrap;box-shadow:0 1px 0 rgba(32,35,38,.14);pointer-events:none;}
+    .person.matched-a .role-label{color:var(--ink);background:var(--paper);}
     .shape-circle{border-radius:50%; aspect-ratio:1.24/1;}
     .shape-capsule{border-radius:999px 870px 960px 900px / 880px 990px 850px 970px;}
     .shape-square{border-radius:12px 14px 10px 18px;}
@@ -367,9 +366,9 @@
         const label=node.el.querySelector('.role-label');
         const interviewer=role==='interviewer';
         label.hidden=false;
-        label.textContent=interviewer?'인터뷰 하는사람\n(왼쪽)':'인터뷰 받는사람\n(오른쪽)';
-        label.title=interviewer?'인터뷰를 진행하는 사람 (왼쪽)':'인터뷰를 받으며 답변하는 사람 (오른쪽)';
-        label.setAttribute('aria-label',interviewer?'인터뷰 하는사람 (왼쪽)':'인터뷰 받는사람 (오른쪽)');
+        label.textContent=interviewer?'인터뷰 하는사람':'인터뷰 받는사람';
+        label.title=interviewer?'인터뷰를 진행하는 사람':'인터뷰를 받으며 답변하는 사람';
+        label.setAttribute('aria-label',interviewer?'인터뷰 하는사람':'인터뷰 받는사람');
         node.el.classList.add('has-role');
         node.role=role;
         const r=node.el.getBoundingClientRect(); node.size.width=r.width; node.size.height=r.height;
