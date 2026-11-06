@@ -15,7 +15,7 @@ function doGet() {
 
 function doPost(e) {
   const lock = LockService.getScriptLock();
-  lock.waitLock(15000);
+  lock.waitLock(30000);
   try {
     const payload = JSON.parse((e && e.postData && e.postData.contents) || '{}');
     if (!ALLOWED_SOURCES.includes(payload.source) || payload.token !== SYNC_TOKEN) {

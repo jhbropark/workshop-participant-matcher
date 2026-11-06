@@ -252,7 +252,7 @@
         presses: '1on1-match-presses',
         topics: IS_TALK_DOMAIN ? 'talk-interview-topics-v1' : '1on1-interview-topics-v1'
       };
-      const SYNC_ENDPOINT = 'https://script.google.com/macros/s/AKfycbxee9WhecBuurpaqi5g42H-5xHtHCMLlfYvhJN5SxLfDaQbqHX2S5YmA7LHz7VoqSht-Q/exec';
+      const SYNC_ENDPOINT = 'https://script.google.com/macros/s/AKfycbwi8UAOLvMMTaWqxlU6H6zSigjdZMoEmSapREYtVCBqLCv29HvCI3WFCyiyXKA4H9ry_A/exec';
       const SYNC_TOKEN = 'talk-varis-sync-v1';
 
       const readJson = (key, fallback) => { try { const raw = localStorage.getItem(key); return raw === null ? fallback : JSON.parse(raw); } catch(e) { return fallback; } };
@@ -294,11 +294,14 @@
       }
 
       function setSyncStatus(label){ if(SYNC_STATUS) SYNC_STATUS.textContent=label; }
+      let syncQueue=Promise.resolve();
       function syncToSheets(event, reason='', archiveSnapshots=[]){
         if(!SYNC_ENDPOINT) return;
         const payload={token:SYNC_TOKEN,source:location.hostname,recordedAt:new Date().toISOString(),sessionId,event,reason,participants:participants.map(node=>node.name),activeHistory:[...matchHistory],archiveSnapshots,matchPresses,usedInterviewTopics};
         setSyncStatus('저장 중');
-        fetch(SYNC_ENDPOINT,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload)}).then(()=>setSyncStatus('저장됨')).catch(()=>setSyncStatus('로컬 저장'));
+        const send=()=>fetch(SYNC_ENDPOINT,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload)}).then(()=>setSyncStatus('저장됨')).catch(()=>setSyncStatus('로컬 저장'));
+        syncQueue=syncQueue.then(send,send);
+        return syncQueue;
       }
 
       function recordMatchPress(){
