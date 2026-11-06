@@ -234,7 +234,8 @@
         {id:12,title:"나만의 미디어아트 정의",q1:"지금까지 이야기한 것을 바탕으로 미디어아트를 한 문장으로 정의한다면 어떻게 말하겠어요?",q2:"그 정의를 직접 보여줄 수 있는 첫 작품을 만든다면 어떤 장면으로 시작하겠어요?"}
       ];
 
-      const INTERVIEW_TOPICS = location.hostname === 'talk.varis.kr' ? TALK_INTERVIEW_TOPICS : ONE_ON_ONE_TOPICS;
+      const IS_TALK_DOMAIN = ['talk.varis.kr','talkwith.varis.kr'].includes(location.hostname);
+      const INTERVIEW_TOPICS = IS_TALK_DOMAIN ? TALK_INTERVIEW_TOPICS : ONE_ON_ONE_TOPICS;
       const STORAGE_KEYS = {
         activeHistory: 'talk-match-history-v2',
         archiveHistory: 'talk-match-history-archive-v2',
@@ -246,9 +247,9 @@
       const LEGACY_KEYS = {
         history: '1on1-history',
         presses: '1on1-match-presses',
-        topics: location.hostname === 'talk.varis.kr' ? 'talk-interview-topics-v1' : '1on1-interview-topics-v1'
+        topics: IS_TALK_DOMAIN ? 'talk-interview-topics-v1' : '1on1-interview-topics-v1'
       };
-      const SYNC_ENDPOINT = 'https://script.google.com/macros/s/AKfycbxb6iOqRvlnC2XTcFeqbVmydxuv-9h-WThtD08Cwui6lNcmviMv2fHg7iUetJeDoS5ySw/exec';
+      const SYNC_ENDPOINT = 'https://script.google.com/macros/s/AKfycbxee9WhecBuurpaqi5g42H-5xHtHCMLlfYvhJN5SxLfDaQbqHX2S5YmA7LHz7VoqSht-Q/exec';
       const SYNC_TOKEN = 'talk-varis-sync-v1';
 
       const readJson = (key, fallback) => { try { const raw = localStorage.getItem(key); return raw === null ? fallback : JSON.parse(raw); } catch(e) { return fallback; } };

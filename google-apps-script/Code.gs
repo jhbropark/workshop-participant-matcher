@@ -1,5 +1,5 @@
 const SPREADSHEET_ID = '1K9WbtUH3S-IsgXPeLDLhnN0yDyruh1ksfz7RicAfNb8';
-const SOURCE = 'talk.varis.kr';
+const ALLOWED_SOURCES = ['talk.varis.kr', 'talkwith.varis.kr'];
 const SYNC_TOKEN = 'talk-varis-sync-v1';
 const SHEETS = {
   sync: 'sync_log',
@@ -18,7 +18,7 @@ function doPost(e) {
   lock.waitLock(15000);
   try {
     const payload = JSON.parse((e && e.postData && e.postData.contents) || '{}');
-    if (payload.source !== SOURCE || payload.token !== SYNC_TOKEN) {
+    if (!ALLOWED_SOURCES.includes(payload.source) || payload.token !== SYNC_TOKEN) {
       return json_({ ok: false, error: 'unauthorized' });
     }
 
@@ -32,7 +32,7 @@ function doPost(e) {
     const topics = Array.isArray(payload.usedInterviewTopics) ? payload.usedInterviewTopics : [];
     const participants = Array.isArray(payload.participants) ? payload.participants : [];
     const participantText = participants.join(' | ');
-    const source = SOURCE;
+    const source = String(payload.source || '');
 
     append_(ss, SHEETS.active,
       ['recordedAt','sessionId','pairKey','participants','event','reason','source'],
