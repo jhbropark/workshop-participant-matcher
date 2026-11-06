@@ -77,7 +77,7 @@
     .team-walker{position:absolute;left:var(--walker-start,50%);top:var(--walker-top,50%);z-index:8;width:70px;height:auto;opacity:.86;mix-blend-mode:multiply;animation:walkerToFacilitator .9s cubic-bezier(.2,.75,.2,1) .2s both;pointer-events:none;}
     .app.group-mode .team-card{z-index:2;pointer-events:none;}
     .app.group-mode .team-walker{display:none;}
-    .team-direction-arrows{position:absolute;inset:0;z-index:3;width:100%;height:100%;overflow:visible;pointer-events:none;color:var(--muted);}
+    .team-direction-arrows{position:absolute;inset:0;z-index:4;width:100%;height:100%;overflow:visible;pointer-events:none;color:var(--ink);}
     .topic-panel{position:absolute;left:50%;top:38px;z-index:30;width:min(900px,calc(100vw - 48px));transform:translateX(-50%);display:grid;gap:12px;text-align:center;pointer-events:none;opacity:0;transition:opacity .32s ease;}
     .topic-panel.visible{opacity:1;}
     .topic-panel[hidden]{display:none;}
@@ -667,10 +667,11 @@
           arrowSvg.setAttribute('aria-label','모든 참여자가 진행자 방향으로 이동');
           const defs=document.createElementNS('http://www.w3.org/2000/svg','defs');
           const marker=document.createElementNS('http://www.w3.org/2000/svg','marker');
-          marker.setAttribute('id',markerId); marker.setAttribute('markerWidth','4'); marker.setAttribute('markerHeight','4'); marker.setAttribute('refX','3.5'); marker.setAttribute('refY','2'); marker.setAttribute('orient','auto'); marker.setAttribute('markerUnits','userSpaceOnUse');
+          marker.setAttribute('id',markerId); marker.setAttribute('markerWidth','6'); marker.setAttribute('markerHeight','6'); marker.setAttribute('refX','5'); marker.setAttribute('refY','3'); marker.setAttribute('orient','auto'); marker.setAttribute('markerUnits','userSpaceOnUse');
           const markerPath=document.createElementNS('http://www.w3.org/2000/svg','path');
-          markerPath.setAttribute('d','M0,0 L4,2 L0,4 Z'); markerPath.setAttribute('fill','currentColor');
+          markerPath.setAttribute('d','M0,0 L6,3 L0,6 Z'); markerPath.setAttribute('fill','currentColor');
           marker.appendChild(markerPath); defs.appendChild(marker); arrowSvg.appendChild(defs);
+          const facilitatorIndex=group.indexOf(facilitator);
           group.filter(person=>person!==facilitator).forEach(person=>{
             const personCenterX=person.targetX+person.size.width/2;
             const personCenterY=person.targetY+person.size.height/2;
@@ -679,11 +680,14 @@
             const startPad=Math.min(person.size.width/2-4,distance*.25); const endPad=Math.min(facilitator.size.width/2-4,distance*.25);
             const startX=personCenterX+ux*startPad; const startY=personCenterY+uy*startPad;
             const endX=facilitatorCenterX-ux*endPad; const endY=facilitatorCenterY-uy*endPad;
-            const curveBend=(group.indexOf(person)-group.indexOf(facilitator))*18;
+            const curveBend=(group.indexOf(person)-facilitatorIndex)*48;
             const controlX=(startX+endX)/2; const controlY=(startY+endY)/2+curveBend;
+            const pathD=`M ${startX} ${startY} Q ${controlX} ${controlY} ${endX} ${endY}`;
+            const halo=document.createElementNS('http://www.w3.org/2000/svg','path');
+            halo.setAttribute('d',pathD); halo.setAttribute('stroke','var(--paper)'); halo.setAttribute('stroke-width','4'); halo.setAttribute('stroke-opacity','0.95'); halo.setAttribute('stroke-linecap','round'); halo.setAttribute('fill','none');
+            arrowSvg.appendChild(halo);
             const path=document.createElementNS('http://www.w3.org/2000/svg','path');
-            path.setAttribute('d',`M ${startX} ${startY} Q ${controlX} ${controlY} ${endX} ${endY}`);
-            path.setAttribute('stroke','currentColor'); path.setAttribute('stroke-width','0.7'); path.setAttribute('stroke-opacity','0.62'); path.setAttribute('stroke-linecap','round'); path.setAttribute('fill','none'); path.setAttribute('marker-end',`url(#${markerId})`);
+            path.setAttribute('d',pathD); path.setAttribute('stroke','currentColor'); path.setAttribute('stroke-width','1.2'); path.setAttribute('stroke-opacity','0.9'); path.setAttribute('stroke-linecap','round'); path.setAttribute('fill','none'); path.setAttribute('marker-end',`url(#${markerId})`);
             arrowSvg.appendChild(path);
           });
           teamLayer.appendChild(arrowSvg);
