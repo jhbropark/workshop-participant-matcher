@@ -373,6 +373,15 @@
         node.role=role;
         const r=node.el.getBoundingClientRect(); node.size.width=r.width; node.size.height=r.height;
       }
+      function setFacilitator(node){
+        const label=node.el.querySelector('.role-label');
+        label.hidden=false;
+        label.textContent='진행자';
+        label.title='대화의 흐름과 순서를 돕는 사람';
+        label.setAttribute('aria-label','진행자');
+        node.el.classList.add('has-role');
+        node.role='facilitator';
+      }
       function clearInterviewRole(node){
         const label=node.el.querySelector('.role-label');
         if(label){ label.hidden=true; label.textContent=''; label.removeAttribute('title'); label.removeAttribute('aria-label'); }
@@ -629,6 +638,8 @@
 
         teams.forEach((group,i)=>{
           const center=centers[i];
+          const facilitator=group[Math.floor(Math.random()*group.length)];
+          setFacilitator(facilitator);
           const gap=Math.min(18,center.cellW*.03);
           const totalW=group.reduce((sum,person)=>sum+person.size.width,0)+gap*(group.length-1);
           let cursor=center.x-totalW/2;
