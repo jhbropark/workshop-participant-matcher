@@ -367,9 +367,9 @@
         const label=node.el.querySelector('.role-label');
         const interviewer=role==='interviewer';
         label.hidden=false;
-        label.textContent=interviewer?'인터뷰어\n(Interviewer)':'인터뷰이\n(Interviewee)';
-        label.title=interviewer?'질문을 던지고 대화의 방향을 이끄는 사람':'질문에 응답하며 생각, 정보, 경험을 제공하는 사람';
-        label.setAttribute('aria-label',interviewer?'인터뷰어 (Interviewer)':'인터뷰이 (Interviewee)');
+        label.textContent=interviewer?'인터뷰 하는사람\n(왼쪽)':'인터뷰 받는사람\n(오른쪽)';
+        label.title=interviewer?'인터뷰를 진행하는 사람 (왼쪽)':'인터뷰를 받으며 답변하는 사람 (오른쪽)';
+        label.setAttribute('aria-label',interviewer?'인터뷰 하는사람 (왼쪽)':'인터뷰 받는사람 (오른쪽)');
         node.el.classList.add('has-role');
         node.role=role;
         const r=node.el.getBoundingClientRect(); node.size.width=r.width; node.size.height=r.height;
