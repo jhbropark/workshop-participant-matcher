@@ -75,9 +75,9 @@
     .team-card::after{content:attr(data-label);position:absolute;left:50%;bottom:4px;transform:translateX(-50%);color:var(--muted);font-size:10px;letter-spacing:.04em;white-space:nowrap;}
     .team-walker{position:absolute;left:var(--walker-start,50%);top:var(--walker-top,50%);z-index:8;width:70px;height:auto;opacity:.86;mix-blend-mode:multiply;animation:walkerToFacilitator .9s cubic-bezier(.2,.75,.2,1) .2s both;pointer-events:none;}
     .app.group-mode .team-card{z-index:2;pointer-events:none;}
-    .app.group-mode .team-walker{z-index:4;}
-    @keyframes walkerToFacilitator{from{left:var(--walker-start,50%);opacity:0;transform:translate(-50%,-50%) scaleX(var(--walker-scale,1)) scaleY(.82);}to{left:var(--walker-target,var(--walker-start,50%));opacity:.86;transform:translate(-50%,-50%) scaleX(var(--walker-scale,1)) scaleY(1);}}
-    @media (prefers-reduced-motion:reduce){.team-walker{animation:none;left:var(--walker-target,var(--walker-start,50%));transform:translate(-50%,-50%) scaleX(var(--walker-scale,1));opacity:.86;}}
+    .app.group-mode .team-walker{display:none;}
+    .team-direction-arrow{position:absolute;z-index:3;transform:translate(-50%,-50%);color:var(--ink);font-size:22px;font-weight:600;line-height:1;pointer-events:none;text-shadow:0 1px 0 var(--paper);}
+    .team-direction-arrow[aria-label]{white-space:nowrap;}
     .topic-panel{position:absolute;left:50%;top:38px;z-index:30;width:min(900px,calc(100vw - 48px));transform:translateX(-50%);display:grid;gap:12px;text-align:center;pointer-events:none;opacity:0;transition:opacity .32s ease;}
     .topic-panel.visible{opacity:1;}
     .topic-panel[hidden]{display:none;}
@@ -657,27 +657,25 @@
           card.dataset.label=`${group.length}명 토론`;
           card.setAttribute('aria-label',`${group.length}명 토론 그룹`);
 
-          const walkerSource=card.querySelector('.team-walker')?.src;
           card.querySelector('.team-walker')?.remove();
-          const facilitatorCenter=facilitator.targetX+facilitator.size.width/2;
           const facilitatorY=facilitator.targetY+facilitator.size.height/2;
-          const groupLeft=Math.min(...group.map(person=>person.targetX));
-          const groupRight=Math.max(...group.map(person=>person.targetX+person.size.width));
-          const hasLeftMembers=group.some(person=>person!==facilitator && person.targetX+person.size.width/2<facilitatorCenter);
-          const hasRightMembers=group.some(person=>person!==facilitator && person.targetX+person.size.width/2>facilitatorCenter);
-          const addWalker=(side)=>{
-            const walker=document.createElement('img');
-            const startX=side<0?groupLeft-70:groupRight+70;
-            const targetX=side<0?facilitatorCenter-facilitator.size.width/2-52:facilitatorCenter+facilitator.size.width/2+52;
-            walker.className=`team-walker ${side<0?'walker-from-left':'walker-from-right'}`; walker.alt=''; walker.src=walkerSource;
-            walker.style.setProperty('--walker-scale',side<0?'1':'-1');
-            walker.style.setProperty('--walker-start',`${Math.round(startX)}px`);
-            walker.style.setProperty('--walker-target',`${Math.round(targetX)}px`);
-            walker.style.setProperty('--walker-top',`${Math.round(facilitatorY)}px`);
-            teamLayer.appendChild(walker);
+          const leftMembers=group.filter(person=>person!==facilitator && person.targetX+person.size.width/2<facilitator.targetX+facilitator.size.width/2);
+          const rightMembers=group.filter(person=>person!==facilitator && person.targetX+person.size.width/2>facilitator.targetX+facilitator.size.width/2);
+          const addDirectionArrow=(side,members)=>{
+            if(!members.length) return;
+            const arrow=document.createElement('div');
+            const arrowX=side<0
+              ? (Math.max(...members.map(person=>person.targetX+person.size.width))+facilitator.targetX)/2
+              : (facilitator.targetX+facilitator.size.width+Math.min(...members.map(person=>person.targetX)))/2;
+            arrow.className='team-direction-arrow';
+            arrow.textContent=side<0?'→':'←';
+            arrow.setAttribute('aria-label','진행자 방향으로 이동');
+            arrow.style.left=`${Math.round(arrowX)}px`;
+            arrow.style.top=`${Math.round(facilitatorY)}px`;
+            teamLayer.appendChild(arrow);
           };
-          if(hasLeftMembers) addWalker(-1);
-          if(hasRightMembers) addWalker(1);
+          addDirectionArrow(-1,leftMembers);
+          addDirectionArrow(1,rightMembers);
         });
 
         if(waitingNode){
