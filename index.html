@@ -75,7 +75,7 @@
     .team-card::after{content:attr(data-label);position:absolute;left:50%;bottom:4px;transform:translateX(-50%);color:var(--muted);font-size:10px;letter-spacing:.04em;white-space:nowrap;}
     .team-walker{position:absolute;left:var(--walker-start,50%);top:var(--walker-top,50%);z-index:8;width:70px;height:auto;opacity:.86;mix-blend-mode:multiply;animation:walkerToFacilitator .9s cubic-bezier(.2,.75,.2,1) .2s both;pointer-events:none;}
     .app.group-mode .team-card{z-index:2;pointer-events:none;}
-    .app.group-mode .team-walker{z-index:1;}
+    .app.group-mode .team-walker{z-index:4;}
     @keyframes walkerToFacilitator{from{left:var(--walker-start,50%);opacity:0;transform:translate(-50%,-50%) scaleX(var(--walker-scale,1)) scaleY(.82);}to{left:var(--walker-target,var(--walker-start,50%));opacity:.86;transform:translate(-50%,-50%) scaleX(var(--walker-scale,1)) scaleY(1);}}
     @media (prefers-reduced-motion:reduce){.team-walker{animation:none;left:var(--walker-target,var(--walker-start,50%));transform:translate(-50%,-50%) scaleX(var(--walker-scale,1));opacity:.86;}}
     .topic-panel{position:absolute;left:50%;top:38px;z-index:30;width:min(900px,calc(100vw - 48px));transform:translateX(-50%);display:grid;gap:12px;text-align:center;pointer-events:none;opacity:0;transition:opacity .32s ease;}
@@ -668,7 +668,7 @@
           const addWalker=(side)=>{
             const walker=document.createElement('img');
             const startX=side<0?groupLeft-70:groupRight+70;
-            const targetX=side<0?facilitatorCenter-facilitator.size.width/2-38:facilitatorCenter+facilitator.size.width/2+38;
+            const targetX=side<0?facilitatorCenter-facilitator.size.width/2-52:facilitatorCenter+facilitator.size.width/2+52;
             walker.className=`team-walker ${side<0?'walker-from-left':'walker-from-right'}`; walker.alt=''; walker.src=walkerSource;
             walker.style.setProperty('--walker-scale',side<0?'1':'-1');
             walker.style.setProperty('--walker-start',`${Math.round(startX)}px`);
