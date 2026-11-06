@@ -91,6 +91,7 @@
     .count-reset{width:18px;height:18px;margin-left:1px;padding:0;border:1px solid var(--rule);border-radius:50%;background:var(--paper);color:var(--muted);font-size:12px;line-height:16px;cursor:pointer;}
     .count-reset:hover{border-color:var(--ink);color:var(--ink);}
     .actions{justify-self:end;display:flex;align-items:center;gap:8px;}
+    .sync-status{min-width:28px;color:var(--muted);font-size:10px;white-space:nowrap;}
     .text-button{min-height:36px;padding:8px 12px;border:0;border-bottom:1px solid var(--ink);border-radius:0;background:transparent;color:var(--ink);font-size:11px;cursor:pointer;}
     .text-button:hover{background:var(--paper-soft);}
     #rematch[hidden]{display:none;}
@@ -109,7 +110,7 @@
       #stage{inset:0 0 112px 0;}
       footer{height:112px;grid-template-columns:auto 1fr auto;gap:8px;padding-inline:16px;}
       .switch-wrap{justify-content:center;gap:0;} .state-button{min-width:52px;height:34px;padding-inline:11px;} .state-button + .state-button{margin-left:5px;}
-      .text-button{padding-inline:7px;} #rematch{display:none !important;}
+      .text-button{padding-inline:7px;} .sync-status{display:none;} #rematch{display:none !important;}
       .team-card{width:47vw;height:118px;}
       .person{min-width:72px;min-height:52px;padding:10px 13px;} .shape-diamond{min-width:78px;}
     }
@@ -131,32 +132,32 @@
         <div class="topic-sub"><div class="topic-sub-label">질문 01</div><p id="topicQuestion1"></p></div>
         <div class="topic-sub"><div class="topic-sub-label">질문 02</div><p id="topicQuestion2"></p></div>
       </div>
-      <div id="teamLayer" aria-hidden="true"></div>
+      <div id="teamLayer" role="status" aria-live="polite" aria-label="매칭 결과"></div>
       <div id="floatingLayer"></div>
       <div id="emptyMessage" class="empty-message" hidden>참여자 명단을 입력해 주세요.</div>
     </section>
     <footer>
-      <div class="count" aria-label="전체 인원수와 매칭된 횟수">
-        <strong id="participantCount">0</strong><span class="count-slash">/</span><strong id="matchPressCount">0</strong><button class="count-reset" id="resetMatchCount" aria-label="reset match count" title="reset">↺</button>
+      <div class="count" aria-label="참여자 수와 매칭 실행 횟수">
+        <strong id="participantCount">0</strong><span class="count-slash">/</span><strong id="matchPressCount">0</strong><button class="count-reset" id="resetMatchCount" aria-label="매칭 실행 횟수 초기화" title="카운트 초기화">↺</button>
       </div>
-      <div class="switch-wrap" role="group" aria-label="matching state">
-        <button class="state-button active" id="offButton" aria-pressed="true">play</button>
-        <button class="state-button" id="onButton" aria-pressed="false">match</button>
+      <div class="switch-wrap" role="group" aria-label="매칭 상태">
+        <button class="state-button active" id="offButton" aria-pressed="true">대기</button>
+        <button class="state-button" id="onButton" aria-pressed="false">매칭</button>
       </div>
       <div class="actions">
-        <button class="text-button" id="rematch" hidden>again</button>
-        <button class="text-button" id="editNames">member</button>
+        <button class="text-button" id="rematch" hidden aria-label="다시 매칭">다시</button>
+        <button class="text-button" id="editNames" aria-label="참여자 편집">참여자</button>
       </div>
     </footer>
     <div class="scrim" id="scrim"></div>
     <aside class="drawer" id="drawer" aria-hidden="true" aria-label="participant">
       <div class="drawer-head">
-        <div><h2>participant</h2></div>
-        <button class="icon-button" id="closeDrawer" aria-label="close">×</button>
+        <div><h2>참여자</h2></div>
+        <button class="icon-button" id="closeDrawer" aria-label="닫기">×</button>
       </div>
-      <textarea id="namesInput" spellcheck="false" aria-label="participant"></textarea>
-      <button class="apply-button" id="applyNames">complete</button>
-      <button class="text-button" id="clearHistory" style="margin-top:10px;align-self:flex-start;">reset</button>
+      <textarea id="namesInput" spellcheck="false" aria-label="참여자 이름 목록"></textarea>
+      <button class="apply-button" id="applyNames">완료</button>
+      <button class="text-button" id="clearHistory" style="margin-top:10px;align-self:flex-start;">새 세션 시작</button>
     </aside>
   </main>
   <script>
@@ -185,6 +186,11 @@
       const topicTitle = document.getElementById('topicTitle');
       const topicQuestion1 = document.getElementById('topicQuestion1');
       const topicQuestion2 = document.getElementById('topicQuestion2');
+      const SYNC_STATUS = document.createElement('span');
+      SYNC_STATUS.id = 'syncStatus';
+      SYNC_STATUS.className = 'sync-status';
+      SYNC_STATUS.setAttribute('aria-live', 'polite');
+      document.querySelector('.actions').appendChild(SYNC_STATUS);
 
       const SHAPES = ['circle','capsule','square','blob','diamond','arch','leaf','pebble','wave','soft','bean','cloud','drop','tilt','slant','notch'];
 
@@ -229,19 +235,50 @@
       ];
 
       const INTERVIEW_TOPICS = location.hostname === 'talk.varis.kr' ? TALK_INTERVIEW_TOPICS : ONE_ON_ONE_TOPICS;
-      const INTERVIEW_STORAGE_KEY = location.hostname === 'talk.varis.kr' ? 'talk-interview-topics-v1' : '1on1-interview-topics-v1';
+      const STORAGE_KEYS = {
+        activeHistory: 'talk-match-history-v2',
+        archiveHistory: 'talk-match-history-archive-v2',
+        matchPresses: 'talk-match-presses-v2',
+        interviewTopics: 'talk-interview-topics-v2',
+        participants: 'talk-participants-v2',
+        sessionId: 'talk-match-session-v2'
+      };
+      const LEGACY_KEYS = {
+        history: '1on1-history',
+        presses: '1on1-match-presses',
+        topics: location.hostname === 'talk.varis.kr' ? 'talk-interview-topics-v1' : '1on1-interview-topics-v1'
+      };
+      const SYNC_ENDPOINT = 'https://script.google.com/macros/s/AKfycbxb6iOqRvlnC2XTcFeqbVmydxuv-9h-WThtD08Cwui6lNcmviMv2fHg7iUetJeDoS5ySw/exec';
+      const SYNC_TOKEN = 'talk-varis-sync-v1';
+
+      const readJson = (key, fallback) => { try { const raw = localStorage.getItem(key); return raw === null ? fallback : JSON.parse(raw); } catch(e) { return fallback; } };
+      const writeJson = (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); return true; } catch(e) { return false; } };
+      const makeSessionId = () => `talk-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
+      const migrateStorage = () => {
+        if(localStorage.getItem(STORAGE_KEYS.activeHistory) === null){ const legacy=readJson(LEGACY_KEYS.history,[]); if(Array.isArray(legacy)) writeJson(STORAGE_KEYS.activeHistory, legacy); }
+        if(localStorage.getItem(STORAGE_KEYS.matchPresses) === null){ const legacy=Number(localStorage.getItem(LEGACY_KEYS.presses)); if(Number.isFinite(legacy) && legacy >= 0) writeJson(STORAGE_KEYS.matchPresses, legacy); }
+        if(localStorage.getItem(STORAGE_KEYS.interviewTopics) === null){ const legacy=readJson(LEGACY_KEYS.topics,[]); if(Array.isArray(legacy)) writeJson(STORAGE_KEYS.interviewTopics, legacy); }
+        try { Object.values(LEGACY_KEYS).forEach(key=>localStorage.removeItem(key)); } catch(e) {}
+      };
+      migrateStorage();
 
       let participants = [];
       let mode = 'float';
       let lastTime = performance.now();
       let resizeTimer = null;
-      let matchHistory = new Set();
-      let matchPresses = 0;
-      let usedInterviewTopics = [];
-      try { const storedTopics = JSON.parse(localStorage.getItem(INTERVIEW_STORAGE_KEY) || '[]'); if(Array.isArray(storedTopics)) usedInterviewTopics = storedTopics.filter(id=>INTERVIEW_TOPICS.some(topic=>topic.id===id)); } catch(e) {}
-      try { const storedPresses = Number(localStorage.getItem('1on1-match-presses')); if(Number.isFinite(storedPresses) && storedPresses >= 0) matchPresses = storedPresses; } catch(e) {}
-      try { const raw = localStorage.getItem('1on1-history'); if(raw){ const arr=JSON.parse(raw); if(Array.isArray(arr)) matchHistory=new Set(arr);} } catch(e){}
-      const saveHistory = () => { try{ localStorage.setItem('1on1-history', JSON.stringify([...matchHistory])); }catch(e){} updateHistoryUI(); };
+      const storedActiveHistory=readJson(STORAGE_KEYS.activeHistory,[]);
+      let matchHistory = new Set(Array.isArray(storedActiveHistory) ? storedActiveHistory.filter(value=>typeof value==='string') : []);
+      let historyArchive = readJson(STORAGE_KEYS.archiveHistory,[]);
+      if(!Array.isArray(historyArchive)) historyArchive=[];
+      let matchPresses = Number(readJson(STORAGE_KEYS.matchPresses,0));
+      if(!Number.isFinite(matchPresses) || matchPresses < 0) matchPresses=0;
+      let usedInterviewTopics = readJson(STORAGE_KEYS.interviewTopics,[]);
+      if(!Array.isArray(usedInterviewTopics)) usedInterviewTopics=[];
+      usedInterviewTopics=usedInterviewTopics.filter(id=>INTERVIEW_TOPICS.some(topic=>topic.id===id));
+      const sessionId = localStorage.getItem(STORAGE_KEYS.sessionId) || makeSessionId();
+      try { localStorage.setItem(STORAGE_KEYS.sessionId, sessionId); } catch(e) {}
+
+      const saveHistory = (reason='active_history_updated') => { writeJson(STORAGE_KEYS.activeHistory,[...matchHistory]); updateHistoryUI(); syncToSheets('active_history',reason); };
       const pairKey = (a,b) => [a,b].sort().join(' | ');
       const random = (min,max) => Math.random()*(max-min)+min;
       const shuffle = (list) => { const copy=[...list]; for(let i=copy.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [copy[i],copy[j]]=[copy[j],copy[i]];} return copy; };
@@ -252,25 +289,35 @@
         if(matchPressCount) matchPressCount.textContent = String(matchPresses);
       }
 
+      function setSyncStatus(label){ if(SYNC_STATUS) SYNC_STATUS.textContent=label; }
+      function syncToSheets(event, reason='', archiveSnapshots=[]){
+        if(!SYNC_ENDPOINT) return;
+        const payload={token:SYNC_TOKEN,source:location.hostname,recordedAt:new Date().toISOString(),sessionId,event,reason,participants:participants.map(node=>node.name),activeHistory:[...matchHistory],archiveSnapshots,matchPresses,usedInterviewTopics};
+        setSyncStatus('저장 중');
+        fetch(SYNC_ENDPOINT,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload)}).then(()=>setSyncStatus('저장됨')).catch(()=>setSyncStatus('로컬 저장'));
+      }
+
       function recordMatchPress(){
         matchPresses += 1;
-        try { localStorage.setItem('1on1-match-presses', String(matchPresses)); } catch(e) {}
+        writeJson(STORAGE_KEYS.matchPresses,matchPresses);
         updateHistoryUI();
+        syncToSheets('match_pressed','match_pressed');
       }
 
       function resetMatchPresses(){
         matchPresses = 0;
-        try { localStorage.removeItem('1on1-match-presses'); } catch(e) {}
+        writeJson(STORAGE_KEYS.matchPresses,0);
         updateHistoryUI();
+        syncToSheets('match_press_reset','match_press_reset');
       }
-
 
       function nextInterviewTopic(){
         let available = INTERVIEW_TOPICS.filter(topic=>!usedInterviewTopics.includes(topic.id));
         if(!available.length){ usedInterviewTopics=[]; available=[...INTERVIEW_TOPICS]; }
         const selected = available[Math.floor(Math.random()*available.length)];
         usedInterviewTopics.push(selected.id);
-        try { localStorage.setItem(INTERVIEW_STORAGE_KEY, JSON.stringify(usedInterviewTopics)); } catch(e) {}
+        writeJson(STORAGE_KEYS.interviewTopics,usedInterviewTopics);
+        syncToSheets('interview_topic_used',`topic_${selected.id}`);
         return selected;
       }
 
@@ -430,8 +477,10 @@
         clean.forEach((name,idx)=>participants.push(createParticipant(name, shapeAssign[idx], idx)));
         participantCount.textContent=clean.length;
         namesInput.value=clean.join('\n');
+        writeJson(STORAGE_KEYS.participants,clean);
         emptyMessage.hidden=clean.length>0;
         updateHistoryUI();
+        syncToSheets('participants_updated','participants_updated');
       }
 
       function getTeamCenters(teamCount, hasWaiting){
@@ -494,8 +543,23 @@
           const note=document.createElement('div'); note.className='waiting-note'; note.textContent='다음 라운드 대기'; teamLayer.appendChild(note); requestAnimationFrame(()=>note.classList.add('visible'));
         }
 
-        saveHistory();
+        saveHistory('match_created');
         updateModeUI();
+      }
+
+      function archiveAndResetState(){
+        const snapshot={archiveId:`archive-${Date.now()}`,archivedAt:new Date().toISOString(),sessionId,participants:participants.map(node=>node.name),history:[...matchHistory],matchPresses,topics:[...usedInterviewTopics],reason:'manual_reset'};
+        historyArchive=[...historyArchive,snapshot].slice(-200);
+        writeJson(STORAGE_KEYS.archiveHistory,historyArchive);
+        matchHistory.clear();
+        matchPresses=0;
+        usedInterviewTopics=[];
+        writeJson(STORAGE_KEYS.activeHistory,[]);
+        writeJson(STORAGE_KEYS.matchPresses,0);
+        writeJson(STORAGE_KEYS.interviewTopics,[]);
+        releaseParticipants();
+        updateHistoryUI();
+        syncToSheets('session_reset','manual_reset',[snapshot]);
       }
 
       function releaseParticipants(){
@@ -533,12 +597,14 @@
       closeDrawer.addEventListener('click',closeEditor);
       scrim.addEventListener('click',closeEditor);
       applyNames.addEventListener('click',()=>{ const names=namesInput.value.split(/\n|,/); setNames(names); closeEditor(); });
-      clearHistory.addEventListener('click',()=>{ if(confirm('매칭 기록을 모두 초기화할까요?')){ matchHistory.clear(); saveHistory(); } });
+      clearHistory.addEventListener('click',()=>{ if(confirm('현재 매칭 기록을 별도 보관하고 새 세션을 시작할까요?')) archiveAndResetState(); });
 
       document.addEventListener('keydown',(e)=>{ if(e.key==='Escape' && drawer.classList.contains('open')) closeEditor(); if(e.code==='Space' && !drawer.classList.contains('open') && e.target===document.body){ e.preventDefault(); (mode==='float' ? onButton : offButton).click(); } });
       window.addEventListener('resize',()=>{ clearTimeout(resizeTimer); resizeTimer=setTimeout(()=>{ participants.forEach(n=>constrainAndBounce(n)); },120); });
 
-      setNames(DEFAULT_NAMES); updateHistoryUI(); requestAnimationFrame(animate);
+      const storedParticipants=readJson(STORAGE_KEYS.participants,[]);
+      setNames(Array.isArray(storedParticipants) && storedParticipants.length ? storedParticipants : DEFAULT_NAMES);
+      updateHistoryUI(); requestAnimationFrame(animate);
     })();
   </script>
 </body>
