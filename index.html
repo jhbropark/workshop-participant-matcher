@@ -360,7 +360,7 @@
         participantsV2: 'talk-participants-v2',
         sessionV2: 'talk-match-session-v2'
       };
-      const SYNC_ENDPOINT = 'https://script.google.com/macros/s/AKfycbwDHUPPzKqSfUsmJG_9fYvSToUMR6AWQ-oGz2bQJIDUi29S0t9uj9Fbyk2iHdY8HfJd_w/exec';
+      const SYNC_ENDPOINT = 'https://script.google.com/macros/s/AKfycbxwVq_zlqifpeFbbfYqouhBUDGAkEjohaCpmgcUnKxWuBqgLeW0H2cBvIw9h_m4SrShAg/exec';
       const SYNC_TOKEN = 'talk-varis-sync-v1';
 
       const readJson = (key, fallback) => { try { const raw = localStorage.getItem(key); return raw === null ? fallback : JSON.parse(raw); } catch(e) { return fallback; } };
@@ -401,6 +401,7 @@
       const storedActiveHistory=readJson(STORAGE_KEYS.activeHistory,[]);
       let matchHistory = new Set(Array.isArray(storedActiveHistory) ? storedActiveHistory.filter(value=>typeof value==='string') : []);
       let historyReady = false;
+      let localParticipantsWerePresent = false;
       let historyArchive = readJson(STORAGE_KEYS.archiveHistory,[]);
       if(!Array.isArray(historyArchive)) historyArchive=[];
       let matchPresses = Number(readJson(STORAGE_KEYS.matchPresses,0));
@@ -443,9 +444,12 @@
           const data = await response.json();
           if(!data.ok || !Array.isArray(data.pairs)) throw new Error('history_invalid');
           data.pairs.filter(pair=>typeof pair==='string' && pair).forEach(pair=>matchHistory.add(pair));
+          if(Array.isArray(data.participants) && data.participants.length && !localParticipantsWerePresent){
+            setNames(data.participants);
+          }
           writeJson(STORAGE_KEYS.activeHistory,[...matchHistory]);
           historyReady=true;
-          setSyncStatus('이력 ' + matchHistory.size + '개 확인');
+          setSyncStatus('이력 ' + matchHistory.size + '개 · 멤버 ' + participants.length + '명');
         } catch(error) {
           historyReady=true;
           setSyncStatus('온라인 이력 확인 실패');
@@ -930,7 +934,8 @@
       if(rematch) rematch.disabled=true;
       setSyncStatus('이력 확인 중');
       const storedParticipants=readJson(STORAGE_KEYS.participants,[]);
-      setNames(Array.isArray(storedParticipants) && storedParticipants.length ? storedParticipants : DEFAULT_NAMES);
+      localParticipantsWerePresent=Array.isArray(storedParticipants) && storedParticipants.length > 0;
+      setNames(localParticipantsWerePresent ? storedParticipants : DEFAULT_NAMES);
       updateHistoryUI();
       loadRemoteHistory();
       requestAnimationFrame(animate);
