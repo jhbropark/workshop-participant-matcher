@@ -12,6 +12,7 @@ const SHEETS = {
   presses: 'match_press_count',
   topics: 'interview_topics',
   pairs: 'pair_history',
+  participants: 'project_participants',
 };
 
 function doGet(e) {
@@ -29,7 +30,8 @@ function doGet(e) {
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const pairs = readPairHistory_(ss, source, projectKey);
-    return json_({ ok: true, source, projectKey, pairs: pairs, count: pairs.length });
+    const participants = readLatestParticipants_(ss, source, projectKey);
+    return json_({ ok: true, source, projectKey, pairs: pairs, participants: participants, count: pairs.length });
   } catch (error) {
     return json_({ ok: false, error: String(error) });
   }
@@ -56,6 +58,12 @@ function doPost(e) {
     const topics = Array.isArray(payload.usedInterviewTopics) ? payload.usedInterviewTopics : [];
     const participants = Array.isArray(payload.participants) ? payload.participants : [];
     const participantText = participants.join(' | ');
+
+    if (participants.length) {
+      append_(ss, SHEETS.participants,
+        ['recordedAt','projectKey','source','sessionId','event','participantsJson','participantsText'],
+        [[recordedAt, projectKey, source, sessionId, event, JSON.stringify(participants), participantText]]);
+    }
 
     const pairRows = [];
     activeHistory.forEach(pairKey => {
@@ -140,6 +148,44 @@ function readPairHistory_(ss, source, projectKey) {
     });
   });
   return Object.keys(seen);
+}
+
+function readLatestParticipants_(ss, source, projectKey) {
+  const participantsSheet = ss.getSheetByName(SHEETS.participants);
+  if (participantsSheet && participantsSheet.getLastRow() > 1) {
+    const values = participantsSheet.getDataRange().getValues();
+    const headers = values[0].map(String);
+    const sourceIndex = headers.indexOf('source');
+    const projectIndex = headers.indexOf('projectKey');
+    const jsonIndex = headers.indexOf('participantsJson');
+    for (let i = values.length - 1; i >= 1; i--) {
+      const row = values[i];
+      const rowSource = sourceIndex >= 0 ? String(row[sourceIndex] || '') : '';
+      const rowProject = projectIndex >= 0 ? String(row[projectIndex] || '') : '';
+      if (rowSource !== source || rowProject !== projectKey || jsonIndex < 0) continue;
+      try {
+        const parsed = JSON.parse(String(row[jsonIndex] || '[]'));
+        if (Array.isArray(parsed)) return parsed.filter(name => typeof name === 'string' && name.trim()).slice(0, 40);
+      } catch (error) {}
+    }
+  }
+
+  const activeSheet = ss.getSheetByName(SHEETS.active);
+  if (!activeSheet || activeSheet.getLastRow() <= 1) return [];
+  const values = activeSheet.getDataRange().getValues();
+  const headers = values[0].map(String);
+  const sourceIndex = headers.indexOf('source');
+  const projectIndex = headers.indexOf('projectKey');
+  const participantsIndex = headers.indexOf('participants');
+  for (let i = values.length - 1; i >= 1; i--) {
+    const row = values[i];
+    const rowSource = sourceIndex >= 0 ? String(row[sourceIndex] || '') : '';
+    const rowProject = projectIndex >= 0 ? String(row[projectIndex] || '') : PROJECTS[rowSource] || '';
+    if (rowSource !== source || rowProject !== projectKey || participantsIndex < 0) continue;
+    const names = String(row[participantsIndex] || '').split(' | ').map(name => name.trim()).filter(Boolean).slice(0, 40);
+    if (names.length) return names;
+  }
+  return [];
 }
 
 function append_(ss, sheetName, headers, rows) {
