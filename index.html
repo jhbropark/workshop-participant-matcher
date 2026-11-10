@@ -739,6 +739,32 @@
 
       function findPairTeams(participantNodes){
         if(participantNodes.length<2) return {teams:[],score:0};
+        let explored=0;
+        const deadStates=new Set();
+        const searchFresh=(remaining,teams)=>{
+          if(!remaining.length) return teams;
+          if(++explored>50000) return null;
+          const state=remaining.map(node=>node.name).sort().join('\u0001');
+          if(deadStates.has(state)) return null;
+          const first=remaining[0];
+          const candidates=shuffle(remaining.slice(1)).sort((a,b)=>{
+            const aUsed=matchHistory.has(pairKey(first.name,a.name))?1:0;
+            const bUsed=matchHistory.has(pairKey(first.name,b.name))?1:0;
+            return aUsed-bUsed;
+          });
+          for(const candidate of candidates){
+            if(matchHistory.has(pairKey(first.name,candidate.name))) continue;
+            const next=remaining.filter(node=>node!==first && node!==candidate);
+            const result=searchFresh(next,teams.concat([[first,candidate]]));
+            if(result) return result;
+          }
+          deadStates.add(state);
+          return null;
+        };
+        const fresh=searchFresh(shuffle(participantNodes),[]);
+        if(fresh) return {teams:fresh,score:0};
+
+        // No perfect fresh matching exists, so return the least-repeating fallback.
         let bestTeams=null; let bestScore=Infinity;
         for(let attempt=0;attempt<600;attempt++){
           const shuffled=shuffle(participantNodes); const teams=[];
