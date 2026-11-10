@@ -402,6 +402,7 @@
       let matchHistory = new Set(Array.isArray(storedActiveHistory) ? storedActiveHistory.filter(value=>typeof value==='string') : []);
       let historyReady = false;
       let localParticipantsWerePresent = false;
+      let participantsInitialized = false;
       let historyArchive = readJson(STORAGE_KEYS.archiveHistory,[]);
       if(!Array.isArray(historyArchive)) historyArchive=[];
       let matchPresses = Number(readJson(STORAGE_KEYS.matchPresses,0));
@@ -696,7 +697,7 @@
         writeJson(STORAGE_KEYS.participants,clean);
         emptyMessage.hidden=clean.length>0;
         updateHistoryUI();
-        syncToSheets('participants_updated','participants_updated');
+        if(participantsInitialized) syncToSheets('participants_updated','participants_updated');
       }
 
       function getTeamCenters(teamCount, hasWaiting){
@@ -936,6 +937,7 @@
       const storedParticipants=readJson(STORAGE_KEYS.participants,[]);
       localParticipantsWerePresent=Array.isArray(storedParticipants) && storedParticipants.length > 0;
       setNames(localParticipantsWerePresent ? storedParticipants : DEFAULT_NAMES);
+      participantsInitialized=true;
       updateHistoryUI();
       loadRemoteHistory();
       requestAnimationFrame(animate);
