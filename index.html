@@ -332,6 +332,7 @@
 
       const IS_TALK_DOMAIN = ['talk.varis.kr','talkwith.varis.kr'].includes(location.hostname);
       const IS_GROUP_DISCUSSION = location.hostname === 'talkwith.varis.kr';
+      const PROJECT_KEY = IS_GROUP_DISCUSSION ? 'talk-group' : 'talk-1on1';
       const INTERVIEW_TOPICS = IS_GROUP_DISCUSSION ? TALKWITH_DISCUSSION_TOPICS : IS_TALK_DOMAIN ? TALK_INTERVIEW_TOPICS : ONE_ON_ONE_TOPICS;
       app.classList.toggle('group-mode',IS_GROUP_DISCUSSION);
       document.title=IS_GROUP_DISCUSSION?'Workshop Group Discussion Matcher':'Workshop 1:1 Matcher';
@@ -339,30 +340,57 @@
       onButton.textContent=IS_GROUP_DISCUSSION?'조 편성':'매칭';
       rematch.textContent=IS_GROUP_DISCUSSION?'다시 조 편성':'다시';
       rematch.setAttribute('aria-label',IS_GROUP_DISCUSSION?'다시 조 편성':'다시 매칭');
+      const STORAGE_PREFIX = 'talk-' + PROJECT_KEY;
       const STORAGE_KEYS = {
-        activeHistory: 'talk-match-history-v2',
-        archiveHistory: 'talk-match-history-archive-v2',
-        matchPresses: 'talk-match-presses-v2',
-        interviewTopics: 'talk-interview-topics-v2',
-        participants: 'talk-participants-v2',
-        sessionId: 'talk-match-session-v2'
+        activeHistory: STORAGE_PREFIX + '-match-history-v3',
+        archiveHistory: STORAGE_PREFIX + '-match-history-archive-v3',
+        matchPresses: STORAGE_PREFIX + '-match-presses-v3',
+        interviewTopics: STORAGE_PREFIX + '-interview-topics-v3',
+        participants: STORAGE_PREFIX + '-participants-v3',
+        sessionId: STORAGE_PREFIX + '-session-v3'
       };
       const LEGACY_KEYS = {
         history: '1on1-history',
+        historyV2: 'talk-match-history-v2',
+        archiveHistoryV2: 'talk-match-history-archive-v2',
         presses: '1on1-match-presses',
-        topics: IS_TALK_DOMAIN ? 'talk-interview-topics-v1' : '1on1-interview-topics-v1'
+        pressesV2: 'talk-match-presses-v2',
+        topics: IS_TALK_DOMAIN ? 'talk-interview-topics-v1' : '1on1-interview-topics-v1',
+        topicsV2: 'talk-interview-topics-v2',
+        participantsV2: 'talk-participants-v2',
+        sessionV2: 'talk-match-session-v2'
       };
-      const SYNC_ENDPOINT = 'https://script.google.com/macros/s/AKfycbwi8UAOLvMMTaWqxlU6H6zSigjdZMoEmSapREYtVCBqLCv29HvCI3WFCyiyXKA4H9ry_A/exec';
+      const SYNC_ENDPOINT = 'https://script.google.com/macros/s/AKfycbwDHUPPzKqSfUsmJG_9fYvSToUMR6AWQ-oGz2bQJIDUi29S0t9uj9Fbyk2iHdY8HfJd_w/exec';
       const SYNC_TOKEN = 'talk-varis-sync-v1';
 
       const readJson = (key, fallback) => { try { const raw = localStorage.getItem(key); return raw === null ? fallback : JSON.parse(raw); } catch(e) { return fallback; } };
       const writeJson = (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); return true; } catch(e) { return false; } };
       const makeSessionId = () => `talk-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
       const migrateStorage = () => {
-        if(localStorage.getItem(STORAGE_KEYS.activeHistory) === null){ const legacy=readJson(LEGACY_KEYS.history,[]); if(Array.isArray(legacy)) writeJson(STORAGE_KEYS.activeHistory, legacy); }
-        if(localStorage.getItem(STORAGE_KEYS.matchPresses) === null){ const legacy=Number(localStorage.getItem(LEGACY_KEYS.presses)); if(Number.isFinite(legacy) && legacy >= 0) writeJson(STORAGE_KEYS.matchPresses, legacy); }
-        if(localStorage.getItem(STORAGE_KEYS.interviewTopics) === null){ const legacy=readJson(LEGACY_KEYS.topics,[]); if(Array.isArray(legacy)) writeJson(STORAGE_KEYS.interviewTopics, legacy); }
-        try { Object.values(LEGACY_KEYS).forEach(key=>localStorage.removeItem(key)); } catch(e) {}
+        if(localStorage.getItem(STORAGE_KEYS.activeHistory) === null){
+          const legacy = PROJECT_KEY === 'talk-1on1' ? readJson(LEGACY_KEYS.historyV2, readJson(LEGACY_KEYS.history,[])) : [];
+          if(Array.isArray(legacy)) writeJson(STORAGE_KEYS.activeHistory, legacy);
+        }
+        if(localStorage.getItem(STORAGE_KEYS.archiveHistory) === null){
+          const legacy = PROJECT_KEY === 'talk-1on1' ? readJson(LEGACY_KEYS.archiveHistoryV2,[]) : [];
+          if(Array.isArray(legacy)) writeJson(STORAGE_KEYS.archiveHistory, legacy);
+        }
+        if(localStorage.getItem(STORAGE_KEYS.matchPresses) === null){
+          const legacy = PROJECT_KEY === 'talk-1on1' ? Number(localStorage.getItem(LEGACY_KEYS.pressesV2)) : Number(localStorage.getItem(LEGACY_KEYS.presses));
+          if(Number.isFinite(legacy) && legacy >= 0) writeJson(STORAGE_KEYS.matchPresses, legacy);
+        }
+        if(localStorage.getItem(STORAGE_KEYS.interviewTopics) === null){
+          const legacy = PROJECT_KEY === 'talk-1on1' ? readJson(LEGACY_KEYS.topicsV2, readJson(LEGACY_KEYS.topics,[])) : [];
+          if(Array.isArray(legacy)) writeJson(STORAGE_KEYS.interviewTopics, legacy);
+        }
+        if(localStorage.getItem(STORAGE_KEYS.participants) === null && PROJECT_KEY === 'talk-1on1'){
+          const legacy = readJson(LEGACY_KEYS.participantsV2,[]);
+          if(Array.isArray(legacy) && legacy.length) writeJson(STORAGE_KEYS.participants, legacy);
+        }
+        if(localStorage.getItem(STORAGE_KEYS.sessionId) === null && PROJECT_KEY === 'talk-1on1'){
+          const legacy = localStorage.getItem(LEGACY_KEYS.sessionV2);
+          if(legacy) localStorage.setItem(STORAGE_KEYS.sessionId, legacy);
+        }
       };
       migrateStorage();
 
@@ -372,6 +400,7 @@
       let resizeTimer = null;
       const storedActiveHistory=readJson(STORAGE_KEYS.activeHistory,[]);
       let matchHistory = new Set(Array.isArray(storedActiveHistory) ? storedActiveHistory.filter(value=>typeof value==='string') : []);
+      let historyReady = false;
       let historyArchive = readJson(STORAGE_KEYS.archiveHistory,[]);
       if(!Array.isArray(historyArchive)) historyArchive=[];
       let matchPresses = Number(readJson(STORAGE_KEYS.matchPresses,0));
@@ -397,11 +426,32 @@
       let syncQueue=Promise.resolve();
       function syncToSheets(event, reason='', archiveSnapshots=[]){
         if(!SYNC_ENDPOINT) return;
-        const payload={token:SYNC_TOKEN,source:location.hostname,recordedAt:new Date().toISOString(),sessionId,event,reason,participants:participants.map(node=>node.name),activeHistory:[...matchHistory],archiveSnapshots,matchPresses,usedInterviewTopics};
+        const payload={token:SYNC_TOKEN,source:location.hostname,projectKey:PROJECT_KEY,recordedAt:new Date().toISOString(),sessionId,event,reason,participants:participants.map(node=>node.name),activeHistory:[...matchHistory],archiveSnapshots,matchPresses,usedInterviewTopics};
         setSyncStatus('저장 중');
         const send=()=>fetch(SYNC_ENDPOINT,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload)}).then(()=>setSyncStatus('저장됨')).catch(()=>setSyncStatus('로컬 저장'));
         syncQueue=syncQueue.then(send,send);
         return syncQueue;
+      }
+
+      async function loadRemoteHistory(){
+        if(!SYNC_ENDPOINT){ historyReady=true; onButton.disabled=false; return; }
+        setSyncStatus('이력 확인 중');
+        try {
+          const query = new URLSearchParams({action:'history',source:location.hostname,projectKey:PROJECT_KEY,token:SYNC_TOKEN,t:String(Date.now())});
+          const response = await fetch(SYNC_ENDPOINT + '?' + query.toString(),{cache:'no-store'});
+          if(!response.ok) throw new Error('history_http_' + response.status);
+          const data = await response.json();
+          if(!data.ok || !Array.isArray(data.pairs)) throw new Error('history_invalid');
+          data.pairs.filter(pair=>typeof pair==='string' && pair).forEach(pair=>matchHistory.add(pair));
+          writeJson(STORAGE_KEYS.activeHistory,[...matchHistory]);
+          historyReady=true;
+          setSyncStatus('이력 ' + matchHistory.size + '개 확인');
+        } catch(error) {
+          historyReady=true;
+          setSyncStatus('온라인 이력 확인 실패');
+        }
+        onButton.disabled=false;
+        if(rematch) rematch.disabled=false;
       }
 
       function recordMatchPress(){
@@ -850,9 +900,14 @@
       document.addEventListener('keydown',(e)=>{ if(e.key==='Escape' && drawer.classList.contains('open')) closeEditor(); if(e.code==='Space' && !drawer.classList.contains('open') && e.target===document.body){ e.preventDefault(); (mode==='float' ? onButton : offButton).click(); } });
       window.addEventListener('resize',()=>{ clearTimeout(resizeTimer); resizeTimer=setTimeout(()=>{ participants.forEach(n=>constrainAndBounce(n)); },120); });
 
+      onButton.disabled=true;
+      if(rematch) rematch.disabled=true;
+      setSyncStatus('이력 확인 중');
       const storedParticipants=readJson(STORAGE_KEYS.participants,[]);
       setNames(Array.isArray(storedParticipants) && storedParticipants.length ? storedParticipants : DEFAULT_NAMES);
-      updateHistoryUI(); requestAnimationFrame(animate);
+      updateHistoryUI();
+      loadRemoteHistory();
+      requestAnimationFrame(animate);
     })();
   </script>
 </body>
