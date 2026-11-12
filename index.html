@@ -115,6 +115,8 @@
     .scrim{position:absolute;inset:0;z-index:90;background:rgba(255,255,255,.54);backdrop-filter:blur(2px);opacity:0;pointer-events:none;transition:opacity .3s ease;}
     .scrim.visible{opacity:1;pointer-events:auto;}
     .empty-message{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);color:var(--muted);font-size:12px;text-align:center;line-height:1.8;}
+    .match-notice{position:absolute;left:50%;bottom:14px;z-index:35;max-width:min(680px,calc(100vw - 40px));transform:translateX(-50%);padding:7px 11px;border:1px solid var(--rule);background:rgba(255,255,255,.9);color:var(--muted);font-size:11px;line-height:1.45;text-align:center;backdrop-filter:blur(8px);}
+    .match-notice[hidden]{display:none;}
     @media (max-width:700px){
       #stage{inset:0 0 112px 0;}
       footer{height:112px;grid-template-columns:auto 1fr auto;gap:8px;padding-inline:16px;}
@@ -144,6 +146,7 @@
       <div id="teamLayer" role="status" aria-live="polite" aria-label="매칭 결과"></div>
       <div id="floatingLayer"></div>
       <div id="emptyMessage" class="empty-message" hidden>참여자 명단을 입력해 주세요.</div>
+      <div id="matchNotice" class="match-notice" role="status" aria-live="polite" hidden></div>
     </section>
     <footer>
       <div class="count" aria-label="참여자 수와 매칭 실행 횟수">
@@ -179,6 +182,7 @@
       const onButton = document.getElementById('onButton');
       const participantCount = document.getElementById('participantCount');
       const matchPressCount = document.getElementById('matchPressCount');
+      const matchNotice = document.getElementById('matchNotice');
       const resetMatchCount = document.getElementById('resetMatchCount');
       const rematch = document.getElementById('rematch');
       const editNames = document.getElementById('editNames');
@@ -330,9 +334,9 @@
         {id:12,title:"나의 공간 기획",q1:"내가 만들고 싶은 공간은 누구를 위한 공간인가요?",q2:"방문자가 떠난 뒤 무엇을 기억하고 다른 사람에게 어떻게 이야기하길 바라나요?"}
       ];
 
-      const IS_TALK_DOMAIN = ['talk.varis.kr','talkwith.varis.kr'].includes(location.hostname);
-      const IS_GROUP_DISCUSSION = location.hostname === 'talkwith.varis.kr';
-      const PROJECT_KEY = IS_GROUP_DISCUSSION ? 'talk-group' : 'talk-1on1';
+      const IS_TALK_DOMAIN = ['talk.varis.kr','talkwith.varis.kr','team.varis.kr'].includes(location.hostname);
+      const IS_GROUP_DISCUSSION = ['talkwith.varis.kr','team.varis.kr'].includes(location.hostname);
+      const PROJECT_KEY = IS_GROUP_DISCUSSION ? (location.hostname === 'team.varis.kr' ? 'team-group' : 'talk-group') : 'talk-1on1';
       const INTERVIEW_TOPICS = IS_GROUP_DISCUSSION ? TALKWITH_DISCUSSION_TOPICS : IS_TALK_DOMAIN ? TALK_INTERVIEW_TOPICS : ONE_ON_ONE_TOPICS;
       app.classList.toggle('group-mode',IS_GROUP_DISCUSSION);
       document.title=IS_GROUP_DISCUSSION?'Workshop Group Discussion Matcher':'Workshop 1:1 Matcher';
@@ -347,6 +351,7 @@
         matchPresses: STORAGE_PREFIX + '-match-presses-v3',
         interviewTopics: STORAGE_PREFIX + '-interview-topics-v3',
         participants: STORAGE_PREFIX + '-participants-v3',
+        facilitatorCounts: STORAGE_PREFIX + '-facilitator-counts-v3',
         sessionId: STORAGE_PREFIX + '-session-v3'
       };
       const LEGACY_KEYS = {
@@ -360,12 +365,24 @@
         participantsV2: 'talk-participants-v2',
         sessionV2: 'talk-match-session-v2'
       };
-      const SYNC_ENDPOINT = 'https://script.google.com/macros/s/AKfycbxwVq_zlqifpeFbbfYqouhBUDGAkEjohaCpmgcUnKxWuBqgLeW0H2cBvIw9h_m4SrShAg/exec';
-      const SYNC_TOKEN = 'talk-varis-sync-v1';
+      const SYNC_ENDPOINT = '/api/sync';
 
       const readJson = (key, fallback) => { try { const raw = localStorage.getItem(key); return raw === null ? fallback : JSON.parse(raw); } catch(e) { return fallback; } };
       const writeJson = (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); return true; } catch(e) { return false; } };
       const makeSessionId = () => `talk-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
+      const makeParticipantId = () => `participant-${Date.now()}-${Math.random().toString(36).slice(2,10)}`;
+      const normalizeParticipantRoster = (value) => {
+        const usedIds = new Set();
+        return (Array.isArray(value) ? value : []).map(item => {
+          const source = typeof item === 'string' ? {name:item} : (item || {});
+          const name = String(source.name || '').trim();
+          if(!name) return null;
+          let id = String(source.id || '').trim();
+          if(!id || usedIds.has(id)) id = makeParticipantId();
+          usedIds.add(id);
+          return {id,name};
+        }).filter(Boolean).slice(0,40);
+      };
       const migrateStorage = () => {
         if(localStorage.getItem(STORAGE_KEYS.activeHistory) === null){
           const legacy = PROJECT_KEY === 'talk-1on1' ? readJson(LEGACY_KEYS.historyV2, readJson(LEGACY_KEYS.history,[])) : [];
@@ -410,51 +427,102 @@
       let usedInterviewTopics = readJson(STORAGE_KEYS.interviewTopics,[]);
       if(!Array.isArray(usedInterviewTopics)) usedInterviewTopics=[];
       usedInterviewTopics=usedInterviewTopics.filter(id=>INTERVIEW_TOPICS.some(topic=>topic.id===id));
-      const sessionId = localStorage.getItem(STORAGE_KEYS.sessionId) || makeSessionId();
+      let facilitatorCounts = readJson(STORAGE_KEYS.facilitatorCounts,{});
+      if(!facilitatorCounts || typeof facilitatorCounts !== 'object' || Array.isArray(facilitatorCounts)) facilitatorCounts={};
+      facilitatorCounts = Object.fromEntries(Object.entries(facilitatorCounts).filter(([id,count])=>Number.isFinite(Number(count)) && Number(count)>=0).map(([id,count])=>[id,Number(count)]));
+      let sessionId = localStorage.getItem(STORAGE_KEYS.sessionId) || makeSessionId();
       try { localStorage.setItem(STORAGE_KEYS.sessionId, sessionId); } catch(e) {}
 
+      const rotateSessionId = () => {
+        sessionId = makeSessionId();
+        try { localStorage.setItem(STORAGE_KEYS.sessionId, sessionId); } catch(e) {}
+        return sessionId;
+      };
       const saveHistory = (reason='active_history_updated') => { writeJson(STORAGE_KEYS.activeHistory,[...matchHistory]); updateHistoryUI(); syncToSheets('active_history',reason); };
-      const pairKey = (a,b) => [a,b].sort().join(' | ');
+      const participantPart = node => `${node.participantId}::${node.name}`;
+      const pairKey = (a,b) => [a,b].sort((left,right)=>left.participantId.localeCompare(right.participantId)).map(participantPart).join(' | ');
+      const legacyPairKey = (a,b) => [a.name,b.name].sort().join(' | ');
+      const migrateRemotePairKey = value => {
+        if(typeof value !== 'string' || !value) return null;
+        if(value.includes('::')) return value;
+        const names = value.split(' | ').map(name=>name.trim());
+        if(names.length !== 2) return null;
+        const first = participants.find(node=>node.name === names[0]);
+        const second = participants.find(node=>node.name === names[1] && node !== first);
+        return first && second ? pairKey(first,second) : null;
+      };
       const random = (min,max) => Math.random()*(max-min)+min;
       const shuffle = (list) => { const copy=[...list]; for(let i=copy.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [copy[i],copy[j]]=[copy[j],copy[i]];} return copy; };
       const bounds = () => { const r=stage.getBoundingClientRect(); return {width:r.width,height:r.height}; };
       const escapeHtml = (v) => v.replace(/[&<>'"]/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;' })[c]);
 
+      function updateMatchNotice(){
+        if(!matchNotice) return;
+        const capacity=participants.length*(participants.length-1)/2;
+        let message='';
+        if(participants.length < 2) message='참여자가 2명 이상이어야 조 편성을 시작할 수 있습니다.';
+        else if(matchHistory.size >= capacity && capacity > 0) message='가능한 모든 조합을 사용했습니다. 다음 편성부터는 일부 조합이 반복될 수 있습니다.';
+        else if(IS_GROUP_DISCUSSION && participants.length===5) message='현재 5명이라 4명 1조로 편성하고 1명은 다음 조를 기다립니다.';
+        matchNotice.textContent=message;
+        matchNotice.hidden=!message;
+      }
+
       function updateHistoryUI(){
         if(matchPressCount) matchPressCount.textContent = String(matchPresses);
+        updateMatchNotice();
       }
 
       function setSyncStatus(label){ if(SYNC_STATUS) SYNC_STATUS.textContent=label; }
+      const fetchWithTimeout = async (url, options={}, timeoutMs=8000) => {
+        const controller = new AbortController();
+        const timer = setTimeout(()=>controller.abort(),timeoutMs);
+        try { return await fetch(url,{...options,signal:controller.signal}); }
+        finally { clearTimeout(timer); }
+      };
       let syncQueue=Promise.resolve();
       function syncToSheets(event, reason='', archiveSnapshots=[]){
-        if(!SYNC_ENDPOINT) return;
-        const payload={token:SYNC_TOKEN,source:location.hostname,projectKey:PROJECT_KEY,recordedAt:new Date().toISOString(),sessionId,event,reason,participants:participants.map(node=>node.name),activeHistory:[...matchHistory],archiveSnapshots,matchPresses,usedInterviewTopics};
+        if(!SYNC_ENDPOINT) return Promise.resolve();
+        const payload={source:location.hostname,projectKey:PROJECT_KEY,recordedAt:new Date().toISOString(),sessionId,event,reason,participants:participants.map(node=>({id:node.participantId,name:node.name})),activeHistory:[...matchHistory],archiveSnapshots,matchPresses,usedInterviewTopics,facilitatorCounts};
         setSyncStatus('저장 중');
-        const send=()=>fetch(SYNC_ENDPOINT,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload)}).then(()=>setSyncStatus('저장됨')).catch(()=>setSyncStatus('로컬 저장'));
+        const send=async()=>{
+          try {
+            const response=await fetchWithTimeout(SYNC_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)},8000);
+            const data=await response.json().catch(()=>null);
+            if(!response.ok || !data?.ok) throw new Error(data?.error || `sync_http_${response.status}`);
+            setSyncStatus('저장됨');
+            return data;
+          } catch(error) {
+            setSyncStatus(error?.name==='AbortError'?'동기화 시간 초과':'로컬 저장');
+            throw error;
+          }
+        };
         syncQueue=syncQueue.then(send,send);
-        return syncQueue;
+        return syncQueue.catch(()=>null);
       }
 
       async function loadRemoteHistory(){
         if(!SYNC_ENDPOINT){ historyReady=true; onButton.disabled=false; return; }
         setSyncStatus('이력 확인 중');
         try {
-          const query = new URLSearchParams({action:'history',source:location.hostname,projectKey:PROJECT_KEY,token:SYNC_TOKEN,t:String(Date.now())});
-          const response = await fetch(SYNC_ENDPOINT + '?' + query.toString(),{cache:'no-store'});
+          const query = new URLSearchParams({action:'history',source:location.hostname,projectKey:PROJECT_KEY,t:String(Date.now())});
+          const response = await fetchWithTimeout(SYNC_ENDPOINT + '?' + query.toString(),{cache:'no-store'},8000);
           if(!response.ok) throw new Error('history_http_' + response.status);
           const data = await response.json();
           if(!data.ok || !Array.isArray(data.pairs)) throw new Error('history_invalid');
-          data.pairs.filter(pair=>typeof pair==='string' && pair).forEach(pair=>matchHistory.add(pair));
-          if(Array.isArray(data.participants) && data.participants.length && !localParticipantsWerePresent){
-            setNames(data.participants);
+          if(Array.isArray(data.participants) && data.participants.length && !localParticipantsWerePresent) setNames(data.participants);
+          data.pairs.filter(pair=>typeof pair==='string' && pair).map(migrateRemotePairKey).filter(Boolean).forEach(pair=>matchHistory.add(pair));
+          if(data.facilitatorCounts && typeof data.facilitatorCounts==='object' && Object.keys(facilitatorCounts).length===0){
+            facilitatorCounts=Object.fromEntries(Object.entries(data.facilitatorCounts).filter(([id,count])=>Number.isFinite(Number(count)) && Number(count)>=0).map(([id,count])=>[id,Number(count)]));
+            writeJson(STORAGE_KEYS.facilitatorCounts,facilitatorCounts);
           }
           writeJson(STORAGE_KEYS.activeHistory,[...matchHistory]);
           historyReady=true;
           setSyncStatus('이력 ' + matchHistory.size + '개 · 멤버 ' + participants.length + '명');
         } catch(error) {
           historyReady=true;
-          setSyncStatus('온라인 이력 확인 실패');
+          setSyncStatus(error?.name==='AbortError'?'이력 확인 시간 초과':'온라인 이력 확인 실패');
         }
+        updateHistoryUI();
         onButton.disabled=false;
         if(rematch) rematch.disabled=false;
       }
@@ -496,7 +564,7 @@
         topicPanel.hidden=true;
       }
 
-      function createParticipant(name, shapeName, index){
+      function createParticipant(name, shapeName, index, participantId){
         const el=document.createElement('div');
         el.className=`person shape-${shapeName}`;
         el.innerHTML=`<span class="person-name">${escapeHtml(name)}</span>`;
@@ -506,7 +574,7 @@
         roleLabel.hidden=true;
         floatingLayer.appendChild(roleLabel);
         const {width,height}=bounds();
-        const node={ id:`${Date.now()}-${index}-${Math.random()}`, name, el, roleLabel, shape:shapeName, x:random(40,Math.max(60,width-150)), y:random(30,Math.max(50,height-110)), vx:random(-46,46)||26, vy:random(-38,38)||-22, targetX:null,targetY:null, rotation:random(-6,6), targetRotation:0, phase:random(0,Math.PI*2), size:{width:100,height:64} };
+        const node={ id:`${Date.now()}-${index}-${Math.random()}`, participantId, name, el, roleLabel, shape:shapeName, x:random(40,Math.max(60,width-150)), y:random(30,Math.max(50,height-110)), vx:random(-46,46)||26, vy:random(-38,38)||-22, targetX:null,targetY:null, rotation:random(-6,6), targetRotation:0, phase:random(0,Math.PI*2), size:{width:100,height:64} };
         el.style.setProperty('--rotation',`${node.rotation}deg`);
         requestAnimationFrame(()=>{ const r=el.getBoundingClientRect(); node.size.width=r.width; node.size.height=r.height; constrainAndBounce(node, true); renderNode(node); });
         return node;
@@ -689,12 +757,13 @@
       function setNames(names){
         hideInterviewTopic();
         floatingLayer.innerHTML=''; teamLayer.innerHTML=''; participants=[]; mode='float'; updateModeUI();
-        const clean=names.map(v=>v.trim()).filter(Boolean).slice(0,40);
+        const clean=normalizeParticipantRoster(names);
         const shapeAssign=assignShapes(clean);
-        clean.forEach((name,idx)=>participants.push(createParticipant(name, shapeAssign[idx], idx)));
+        clean.forEach((person,idx)=>participants.push(createParticipant(person.name, shapeAssign[idx], idx, person.id)));
         participantCount.textContent=clean.length;
-        namesInput.value=clean.join('\n');
+        namesInput.value=clean.map(person=>person.name).join('\n');
         writeJson(STORAGE_KEYS.participants,clean);
+        matchHistory = new Set([...matchHistory].map(migrateRemotePairKey).filter(Boolean));
         emptyMessage.hidden=clean.length>0;
         updateHistoryUI();
         if(participantsInitialized) syncToSheets('participants_updated','participants_updated');
@@ -733,7 +802,7 @@
             const group=shuffled.slice(cursor,cursor+size); cursor+=size; teams.push(group);
             for(let i=0;i<group.length;i++){
               for(let j=i+1;j<group.length;j++){
-                if(matchHistory.has(pairKey(group[i].name,group[j].name))) score+=1;
+                if(matchHistory.has(pairKey(group[i],group[j]))) score+=1;
               }
             }
           });
@@ -753,12 +822,12 @@
           if(deadStates.has(state)) return null;
           const first=remaining[0];
           const candidates=shuffle(remaining.slice(1)).sort((a,b)=>{
-            const aUsed=matchHistory.has(pairKey(first.name,a.name))?1:0;
-            const bUsed=matchHistory.has(pairKey(first.name,b.name))?1:0;
+            const aUsed=matchHistory.has(pairKey(first,a))?1:0;
+            const bUsed=matchHistory.has(pairKey(first,b))?1:0;
             return aUsed-bUsed;
           });
           for(const candidate of candidates){
-            if(matchHistory.has(pairKey(first.name,candidate.name))) continue;
+            if(matchHistory.has(pairKey(first,candidate))) continue;
             const next=remaining.filter(node=>node!==first && node!==candidate);
             const result=searchFresh(next,teams.concat([[first,candidate]]));
             if(result) return result;
@@ -774,10 +843,19 @@
         for(let attempt=0;attempt<600;attempt++){
           const shuffled=shuffle(participantNodes); const teams=[];
           for(let i=0;i<Math.floor(shuffled.length/2);i++){ teams.push([shuffled[i*2],shuffled[i*2+1]]); }
-          const score=teams.reduce((acc,pair)=>acc+(matchHistory.has(pairKey(pair[0].name,pair[1].name))?1:0),0);
+          const score=teams.reduce((acc,pair)=>acc+(matchHistory.has(pairKey(pair[0],pair[1]))?1:0),0);
           if(score<bestScore){ bestScore=score; bestTeams=teams; if(score===0) break; }
         }
         return {teams:bestTeams||[],score:bestScore};
+      }
+
+      function chooseFacilitator(group){
+        const minimum=Math.min(...group.map(node=>Number(facilitatorCounts[node.participantId] || 0)));
+        const candidates=group.filter(node=>Number(facilitatorCounts[node.participantId] || 0)===minimum);
+        const facilitator=candidates[Math.floor(Math.random()*candidates.length)] || group[0];
+        facilitatorCounts[facilitator.participantId]=Number(facilitatorCounts[facilitator.participantId] || 0)+1;
+        writeJson(STORAGE_KEYS.facilitatorCounts,facilitatorCounts);
+        return facilitator;
       }
 
       function matchParticipantsInPairs(){
@@ -807,7 +885,7 @@
           const gapCenterY=(yA+a.size.height/2+yB+b.size.height/2)/2;
           a.targetX=left; a.targetY=yA; a.targetRotation=random(-2,1);
           b.targetX=left+a.size.width+gap; b.targetY=yB; b.targetRotation=random(-1,2);
-          matchHistory.add(pairKey(a.name,b.name));
+          matchHistory.add(pairKey(a,b));
           const card=document.createElement('div'); card._pair=[a,b]; card.className='team-card'; card.style.left=`${center.x}px`; card.style.top=`${center.y}px`; card.style.setProperty('--team-tilt',`${random(-2.2,2.2)}deg`); card.style.setProperty('--walker-start',`${gapCenterX-cardLeft}px`); card.style.setProperty('--walker-top',`${gapCenterY-cardTop}px`); card.innerHTML=`<img class="team-walker" alt="" src="data:image/gif;base64,R0lGODlh8ABQAPf/AAAAAB8hJh8iJSAiJiAiJyAjJSAjJiAjJiAjJiAkJCAkJCEjJSEjJiEjJiEjJyEkJiIiKSoqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKgD/ACH/C05FVFNDQVBFMi4wAwEAAAAh+QQJCAD/ACzAAAMAGgA2AAAI/wD/CRw4kICBgwgJEFzIUCBCAQ4cCEDYsOJBBwwZHKy4cCNHjxwNMuD4z4EBhR8NkHSo8qOAlf8mkjSAcaXJmTVJ3nQJU2ZKmCAbGszZUCPK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">`; teamLayer.appendChild(card); requestAnimationFrame(()=>card.classList.add('visible'));
         });
         if(waitingNode){
@@ -845,7 +923,7 @@
 
         teams.forEach((group,i)=>{
           const center=centers[i];
-          const facilitator=group[Math.floor(Math.random()*group.length)];
+          const facilitator=chooseFacilitator(group);
           setFacilitator(facilitator);
           const gap=Math.min(18,center.cellW*.03);
           const totalW=group.reduce((sum,person)=>sum+person.size.width,0)+gap*(group.length-1);
@@ -853,7 +931,7 @@
           group.forEach((person,index)=>{
             person.targetX=cursor; person.targetY=center.y-person.size.height/2+random(-3,3); person.targetRotation=random(-2,2);
             person.el.classList.add(matchedClasses[index]||'matched-b');
-            group.slice(index+1).forEach(other=>matchHistory.add(pairKey(person.name,other.name)));
+            group.slice(index+1).forEach(other=>matchHistory.add(pairKey(person,other)));
             cursor+=person.size.width+gap;
           });
           const card=document.createElement('div'); card.className='team-card'; card.style.left=`${center.x}px`; card.style.top=`${center.y}px`; card.style.setProperty('--team-tilt',`${random(-2.2,2.2)}deg`); card.innerHTML=`<img class="team-walker" alt="" src="data:image/gif;base64,R0lGODlh8ABQAPf/AAAAAB8hJh8iJSAiJiAiJyAjJSAjJiAjJiAjJiAkJCAkJCEjJSEjJiEjJiEjJyEkJiIiKSoqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKgD/ACH/C05FVFNDQVBFMi4wAwEAAAAh+QQJCAD/ACzAAAMAGgA2AAAI/wD/CRw4kICBgwgJEFzIUCBCAQ4cCEDYsOJBBwwZHKy4cCNHjxwNMuD4z4EBhR8NkHSo8qOAlf8mkjSAcaXJmTVJ3nQJU2ZKmCAbGszZUCPK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">`; teamLayer.appendChild(card); requestAnimationFrame(()=>card.classList.add('visible'));
@@ -876,15 +954,19 @@
       }
 
       function archiveAndResetState(){
-        const snapshot={archiveId:`archive-${Date.now()}`,archivedAt:new Date().toISOString(),sessionId,participants:participants.map(node=>node.name),history:[...matchHistory],matchPresses,topics:[...usedInterviewTopics],reason:'manual_reset'};
+        const previousSessionId=sessionId;
+        const snapshot={archiveId:`archive-${Date.now()}`,archivedAt:new Date().toISOString(),sessionId:previousSessionId,participants:participants.map(node=>({id:node.participantId,name:node.name})),history:[...matchHistory],matchPresses,topics:[...usedInterviewTopics],facilitatorCounts:{...facilitatorCounts},reason:'manual_reset'};
         historyArchive=[...historyArchive,snapshot].slice(-200);
         writeJson(STORAGE_KEYS.archiveHistory,historyArchive);
         matchHistory.clear();
         matchPresses=0;
         usedInterviewTopics=[];
+        facilitatorCounts={};
+        rotateSessionId();
         writeJson(STORAGE_KEYS.activeHistory,[]);
         writeJson(STORAGE_KEYS.matchPresses,0);
         writeJson(STORAGE_KEYS.interviewTopics,[]);
+        writeJson(STORAGE_KEYS.facilitatorCounts,facilitatorCounts);
         releaseParticipants();
         updateHistoryUI();
         syncToSheets('session_reset','manual_reset',[snapshot]);

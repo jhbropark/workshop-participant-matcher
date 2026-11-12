@@ -1,8 +1,9 @@
 const SPREADSHEET_ID = '1K9WbtUH3S-IsgXPeLDLhnN0yDyruh1ksfz7RicAfNb8';
-const ALLOWED_SOURCES = ['talk.varis.kr', 'talkwith.varis.kr'];
+const ALLOWED_SOURCES = ['talk.varis.kr', 'talkwith.varis.kr', 'team.varis.kr'];
 const PROJECTS = {
   'talk.varis.kr': 'talk-1on1',
   'talkwith.varis.kr': 'talk-group',
+  'team.varis.kr': 'team-group',
 };
 const SYNC_TOKEN = 'talk-varis-sync-v1';
 const SHEETS = {
@@ -13,6 +14,7 @@ const SHEETS = {
   topics: 'interview_topics',
   pairs: 'pair_history',
   participants: 'project_participants',
+  facilitators: 'facilitator_history',
 };
 
 function doGet(e) {
@@ -31,7 +33,8 @@ function doGet(e) {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const pairs = readPairHistory_(ss, source, projectKey);
     const participants = readLatestParticipants_(ss, source, projectKey);
-    return json_({ ok: true, source, projectKey, pairs: pairs, participants: participants, count: pairs.length });
+    const facilitatorCounts = readLatestFacilitatorCounts_(ss, source, projectKey);
+    return json_({ ok: true, source, projectKey, pairs: pairs, participants: participants, facilitatorCounts: facilitatorCounts, count: pairs.length });
   } catch (error) {
     return json_({ ok: false, error: String(error) });
   }
@@ -57,7 +60,8 @@ function doPost(e) {
     const archiveSnapshots = Array.isArray(payload.archiveSnapshots) ? payload.archiveSnapshots : [];
     const topics = Array.isArray(payload.usedInterviewTopics) ? payload.usedInterviewTopics : [];
     const participants = Array.isArray(payload.participants) ? payload.participants : [];
-    const participantText = participants.join(' | ');
+    const facilitatorCounts = payload.facilitatorCounts && typeof payload.facilitatorCounts === 'object' && !Array.isArray(payload.facilitatorCounts) ? payload.facilitatorCounts : {};
+    const participantText = participantNames_(participants).join(' | ');
 
     if (participants.length) {
       append_(ss, SHEETS.participants,
@@ -94,8 +98,12 @@ function doPost(e) {
       const pairs = Array.isArray(snapshot.history) ? snapshot.history : [''];
       append_(ss, SHEETS.archive,
         ['archivedAt','archiveId','sessionId','pairKey','participants','matchPresses','topics','reason','source','projectKey'],
-        pairs.map(pairKey => [snapshot.archivedAt || recordedAt, String(snapshot.archiveId || ''), String(snapshot.sessionId || sessionId), String(pairKey), (snapshot.participants || participants).join(' | '), Number(snapshot.matchPresses || 0), (snapshot.topics || topics).join(' | '), String(snapshot.reason || reason), source, projectKey]));
+        pairs.map(pairKey => [snapshot.archivedAt || recordedAt, String(snapshot.archiveId || ''), String(snapshot.sessionId || sessionId), String(pairKey), participantNames_(snapshot.participants || participants).join(' | '), Number(snapshot.matchPresses || 0), (snapshot.topics || topics).join(' | '), String(snapshot.reason || reason), source, projectKey]));
     });
+
+    append_(ss, SHEETS.facilitators,
+      ['recordedAt','sessionId','facilitatorCountsJson','event','source','projectKey'],
+      [[recordedAt, sessionId, JSON.stringify(facilitatorCounts), event, source, projectKey]]);
 
     append_(ss, SHEETS.sync,
       ['recordedAt','sessionId','event','storageKeys','status','source','projectKey'],
@@ -165,7 +173,11 @@ function readLatestParticipants_(ss, source, projectKey) {
       if (rowSource !== source || rowProject !== projectKey || jsonIndex < 0) continue;
       try {
         const parsed = JSON.parse(String(row[jsonIndex] || '[]'));
-        if (Array.isArray(parsed)) return parsed.filter(name => typeof name === 'string' && name.trim()).slice(0, 40);
+        if (Array.isArray(parsed)) return parsed.map(item => {
+          if (typeof item === 'string') return item.trim();
+          if (item && typeof item === 'object' && String(item.name || '').trim()) return { id: String(item.id || ''), name: String(item.name).trim() };
+          return null;
+        }).filter(Boolean).slice(0, 40);
       } catch (error) {}
     }
   }
@@ -186,6 +198,31 @@ function readLatestParticipants_(ss, source, projectKey) {
     if (names.length) return names;
   }
   return [];
+}
+
+function participantNames_(participants) {
+  return (Array.isArray(participants) ? participants : []).map(item => typeof item === 'string' ? item.trim() : String(item && item.name || '').trim()).filter(Boolean).slice(0, 40);
+}
+
+function readLatestFacilitatorCounts_(ss, source, projectKey) {
+  const sheet = ss.getSheetByName(SHEETS.facilitators);
+  if (!sheet || sheet.getLastRow() <= 1) return {};
+  const values = sheet.getDataRange().getValues();
+  const headers = values[0].map(String);
+  const sourceIndex = headers.indexOf('source');
+  const projectIndex = headers.indexOf('projectKey');
+  const countsIndex = headers.indexOf('facilitatorCountsJson');
+  for (let i = values.length - 1; i >= 1; i--) {
+    const row = values[i];
+    const rowSource = sourceIndex >= 0 ? String(row[sourceIndex] || '') : '';
+    const rowProject = projectIndex >= 0 ? String(row[projectIndex] || '') : '';
+    if (rowSource !== source || rowProject !== projectKey || countsIndex < 0) continue;
+    try {
+      const parsed = JSON.parse(String(row[countsIndex] || '{}'));
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
+    } catch (error) {}
+  }
+  return {};
 }
 
 function append_(ss, sheetName, headers, rows) {
