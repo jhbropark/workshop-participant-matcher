@@ -505,7 +505,7 @@
         setSyncStatus('이력 확인 중');
         try {
           const query = new URLSearchParams({action:'history',source:location.hostname,projectKey:PROJECT_KEY,t:String(Date.now())});
-          const response = await fetchWithTimeout(SYNC_ENDPOINT + '?' + query.toString(),{cache:'no-store'},8000);
+          const response = await fetchWithTimeout(SYNC_ENDPOINT + '?' + query.toString(),{cache:'no-store'},45000);
           if(!response.ok) throw new Error('history_http_' + response.status);
           const data = await response.json();
           if(!data.ok || !Array.isArray(data.pairs)) throw new Error('history_invalid');
@@ -1013,7 +1013,7 @@
       document.addEventListener('keydown',(e)=>{ if(e.key==='Escape' && drawer.classList.contains('open')) closeEditor(); if(e.code==='Space' && !drawer.classList.contains('open') && e.target===document.body){ e.preventDefault(); (mode==='float' ? onButton : offButton).click(); } });
       window.addEventListener('resize',()=>{ clearTimeout(resizeTimer); resizeTimer=setTimeout(()=>{ participants.forEach(n=>constrainAndBounce(n)); },120); });
 
-      onButton.disabled=true;
+      onButton.disabled=false;
       if(rematch) rematch.disabled=true;
       setSyncStatus('이력 확인 중');
       const storedParticipants=readJson(STORAGE_KEYS.participants,[]);
