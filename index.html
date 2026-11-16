@@ -136,6 +136,18 @@
     .order-number{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--ink);color:#fff;font-size:13px;font-weight:700;flex:none;}
     .order-name{display:block;font-size:clamp(17px,2vw,22px);font-weight:600;letter-spacing:-.03em;}
     .order-theme{display:block;margin-top:4px;color:var(--muted);font-size:12px;letter-spacing:-.02em;}
+    .presentation-timer{display:flex;flex-direction:column;gap:9px;padding:16px 18px;border:1px solid var(--ink);background:#fff;}
+    .presentation-timer-head{display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
+    .presentation-timer-label{color:var(--muted);font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;}
+    .presentation-timer-value{min-width:5ch;font-variant-numeric:tabular-nums;font-size:clamp(34px,5vw,54px);line-height:1;font-weight:700;letter-spacing:-.05em;}
+    .presentation-start-button{margin-left:auto;border:1px solid var(--ink);padding:11px 17px;background:var(--ink);color:#fff;font-size:14px;font-weight:700;cursor:pointer;}
+    .presentation-start-button:hover{background:#3a3d40;}
+    .presentation-start-button:disabled{cursor:default;opacity:.55;}
+    .presentation-timer-status{margin:0;color:var(--muted);font-size:13px;line-height:1.5;letter-spacing:-.02em;}
+    .presentation-timer.is-warning{border-color:#b77900;background:#fffaf0;}
+    .presentation-timer.is-warning .presentation-timer-value{color:#b77900;}
+    .presentation-timer.is-ended{border-color:#9b2c2c;background:#fff6f6;}
+    .presentation-timer.is-ended .presentation-timer-value{color:#9b2c2c;}
     .order-notice{margin-top:auto;padding-top:18px;border-top:1px solid var(--rule);color:var(--ink);font-size:14px;line-height:1.7;letter-spacing:-.025em;}
     .order-notice p{margin:0;}
     .order-notice p+p{margin-top:2px;}
@@ -499,6 +511,9 @@
       let matchHistory = new Set(IS_ORDER_DOMAIN ? [] : (Array.isArray(storedActiveHistory) ? storedActiveHistory.filter(value=>typeof value==='string') : []));
       let presentationOrders = IS_ORDER_DOMAIN && Array.isArray(storedActiveHistory) ? storedActiveHistory.filter(value=>typeof value==='string' && value.startsWith('order::')) : [];
       let currentPresentationOrder = [];
+      const PRESENTATION_DURATION_SECONDS = 7 * 60;
+      const PRESENTATION_END_MESSAGE = '발표시간이 종료되었습니다.';
+      const presentationTimer = { intervalId:null, remaining:PRESENTATION_DURATION_SECONDS, started:false, ended:false, bellPlayed:false, board:null, audioContext:null };
       let historyReady = false;
       let localParticipantsWerePresent = false;
       let participantsInitialized = false;
@@ -986,8 +1001,128 @@
         updateModeUI();
       }
 
+      function formatPresentationTime(seconds){
+        const minutes=Math.floor(seconds/60).toString().padStart(2,'0');
+        const remainder=(seconds%60).toString().padStart(2,'0');
+        return minutes+':'+remainder;
+      }
+
+      function playPresentationBell(){
+        const AudioContextClass=window.AudioContext||window.webkitAudioContext;
+        if(!AudioContextClass) return;
+        try{
+          if(!presentationTimer.audioContext) presentationTimer.audioContext=new AudioContextClass();
+          const context=presentationTimer.audioContext;
+          if(context.state==='suspended') context.resume();
+          const start=context.currentTime;
+          [659.25,987.77,1318.51].forEach((frequency,index)=>{
+            const oscillator=context.createOscillator();
+            const gain=context.createGain();
+            const at=start+index*.12;
+            oscillator.type='sine';
+            oscillator.frequency.setValueAtTime(frequency,at);
+            gain.gain.setValueAtTime(.0001,at);
+            gain.gain.exponentialRampToValueAtTime(.2,at+.025);
+            gain.gain.exponentialRampToValueAtTime(.0001,at+.9);
+            oscillator.connect(gain);
+            gain.connect(context.destination);
+            oscillator.start(at);
+            oscillator.stop(at+1);
+          });
+        }catch(error){ console.warn('presentation_bell_failed',error); }
+      }
+
+      function announcePresentationEnd(){
+        if(!('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) return;
+        try{
+          window.speechSynthesis.cancel();
+          const utterance=new SpeechSynthesisUtterance(PRESENTATION_END_MESSAGE);
+          utterance.lang='ko-KR';
+          utterance.rate=1;
+          utterance.pitch=1;
+          window.speechSynthesis.speak(utterance);
+        }catch(error){ console.warn('presentation_announcement_failed',error); }
+      }
+
+      function renderPresentationTimer(){
+        const board=presentationTimer.board;
+        if(!board) return;
+        const value=board.querySelector('.presentation-timer-value');
+        const status=board.querySelector('.presentation-timer-status');
+        const button=board.querySelector('.presentation-start-button');
+        const timer=board.querySelector('.presentation-timer');
+        if(!value||!status||!button||!timer) return;
+        value.textContent=formatPresentationTime(presentationTimer.remaining);
+        timer.classList.toggle('is-warning',presentationTimer.started && !presentationTimer.ended && presentationTimer.remaining<=60);
+        timer.classList.toggle('is-ended',presentationTimer.ended);
+        if(presentationTimer.ended){
+          button.disabled=false;
+          button.textContent='다시 시작';
+          status.textContent=PRESENTATION_END_MESSAGE;
+        }else if(presentationTimer.started){
+          button.disabled=true;
+          button.textContent='발표 진행 중';
+          status.textContent=presentationTimer.remaining<=60 ? '1분 남음 · 벨소리가 울렸습니다.' : '발표가 진행 중입니다.';
+        }else{
+          button.disabled=false;
+          button.textContent='발표 시작';
+          status.textContent='발표 시작 버튼을 눌러 7분 타이머를 시작해 주세요.';
+        }
+      }
+
+      function resetPresentationTimer(){
+        if(presentationTimer.intervalId){ clearInterval(presentationTimer.intervalId); presentationTimer.intervalId=null; }
+        if(presentationTimer.audioContext){ try{ presentationTimer.audioContext.close(); }catch(error){} presentationTimer.audioContext=null; }
+        presentationTimer.remaining=PRESENTATION_DURATION_SECONDS;
+        presentationTimer.started=false;
+        presentationTimer.ended=false;
+        presentationTimer.bellPlayed=false;
+        presentationTimer.board=null;
+      }
+
+      function setupPresentationTimer(board){
+        resetPresentationTimer();
+        presentationTimer.board=board;
+        const button=board.querySelector('.presentation-start-button');
+        button.addEventListener('click',()=>{
+          if(presentationTimer.intervalId) return;
+          if(presentationTimer.ended){
+            presentationTimer.remaining=PRESENTATION_DURATION_SECONDS;
+            presentationTimer.ended=false;
+            presentationTimer.bellPlayed=false;
+          }
+          const AudioContextClass=window.AudioContext||window.webkitAudioContext;
+          if(AudioContextClass){
+            try{
+              presentationTimer.audioContext=new AudioContextClass();
+              if(presentationTimer.audioContext.state==='suspended') presentationTimer.audioContext.resume();
+            }catch(error){ presentationTimer.audioContext=null; }
+          }
+          presentationTimer.started=true;
+          renderPresentationTimer();
+          presentationTimer.intervalId=setInterval(()=>{
+            presentationTimer.remaining=Math.max(0,presentationTimer.remaining-1);
+            if(presentationTimer.remaining===60 && !presentationTimer.bellPlayed){
+              presentationTimer.bellPlayed=true;
+              playPresentationBell();
+            }
+            if(presentationTimer.remaining===0){
+              clearInterval(presentationTimer.intervalId);
+              presentationTimer.intervalId=null;
+              presentationTimer.ended=true;
+              renderPresentationTimer();
+              announcePresentationEnd();
+              return;
+            }
+            renderPresentationTimer();
+          },1000);
+        });
+        renderPresentationTimer();
+      }
+
       function drawPresentationOrder(){
         if(!participants.length) return;
+        resetPresentationTimer();
         const byName=new Map(participants.map(person=>[person.name,person]));
         const interestByName=new Map(DICE_INTEREST_ORDER.map(item=>[item.name,item]));
         const interestOrderedPeople=DICE_INTEREST_ORDER.map(item=>byName.get(item.name)).filter(Boolean);
@@ -1006,8 +1141,10 @@
         const board=document.createElement('div');
         board.className='order-board';
         const modeLabel=configuredRoster ? (participants.length===DICE_INTEREST_ORDER.length?'관심사 연결 순서':'관심사 연결 순서 · 일부 명단') : hasInterestOrder ? '관심사 우선 · 기타 무작위' : '무작위 순서';
-        board.innerHTML='<div class="order-board-title"><h2>발표 순서</h2><span>'+modeLabel+' · '+currentPresentationOrder.length+'명</span></div><div class="order-list">'+orderedPeople.map((person,index)=>{const meta=interestByName.get(person.name)||{theme:'무작위 배치'};return '<div class="order-item"><span class="order-number">'+(index+1)+'</span><span><span class="order-name">'+escapeHtml(person.name)+'</span><small class="order-theme">'+escapeHtml(meta.theme)+'</small></span></div>';}).join('')+'</div><div class="order-notice"><p>발표는 정해진 순서에 따라 진행됩니다.</p><p>다음 발표자는 미리 포디움 옆 의자에서 대기해 주세요.</p><p class="notice-emphasis">* 발표자는 포디움에 준비된 노트북에서 발표 자료와 화면 송출 상태를 확인한 후, 직접 발표를 시작해 주시기 바랍니다.</p></div>';
+        board.innerHTML='<div class="order-board-title"><h2>발표 순서</h2><span>'+modeLabel+' · '+currentPresentationOrder.length+'명</span></div><div class="presentation-timer"><div class="presentation-timer-head"><span class="presentation-timer-label">PRESENTATION TIMER</span><strong class="presentation-timer-value">07:00</strong><button class="presentation-start-button" type="button">발표 시작</button></div><p class="presentation-timer-status" aria-live="polite">발표 시작 버튼을 눌러 7분 타이머를 시작해 주세요.</p></div><div class="order-list">'+orderedPeople.map((person,index)=>{const meta=interestByName.get(person.name)||{theme:'무작위 배치'};return '<div class="order-item"><span class="order-number">'+(index+1)+'</span><span><span class="order-name">'+escapeHtml(person.name)+'</span><small class="order-theme">'+escapeHtml(meta.theme)+'</small></span></div>';}).join('')+'</div><div class="order-notice"><p>발표는 정해진 순서에 따라 진행됩니다.</p><p>다음 발표자는 미리 포디움 옆 의자에서 대기해 주세요.</p><p class="notice-emphasis">* 발표자는 포디움에 준비된 노트북에서 발표 자료와 화면 송출 상태를 확인한 후, 직접 발표를 시작해 주시기 바랍니다.</p></div>';
         teamLayer.appendChild(board);
+        presentationTimer.board=board;
+        setupPresentationTimer(board);
         updateModeUI();
         setSyncStatus((hasInterestOrder?'관심사 순서 ':'발표 순서 ') + presentationOrders.length + '회');
         syncToSheets('presentation_order_created',hasInterestOrder?'interest_based_order':'random_order');
@@ -1092,6 +1229,7 @@
 
       function releaseParticipants(){
         hideInterviewTopic();
+        resetPresentationTimer();
         if(IS_ORDER_DOMAIN){ currentPresentationOrder=[]; floatingLayer.style.visibility='visible'; }
         mode='float'; teamLayer.innerHTML='';
         const {width,height}=bounds();
