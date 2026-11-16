@@ -513,6 +513,7 @@
       let currentPresentationOrder = [];
       const PRESENTATION_DURATION_SECONDS = 7 * 60;
       const PRESENTATION_END_MESSAGE = '발표시간이 종료되었습니다.';
+      const PRESENTATION_ONE_MINUTE_MESSAGE = '1분 남았습니다.';
       const presentationTimer = { intervalId:null, remaining:PRESENTATION_DURATION_SECONDS, started:false, ended:false, bellPlayed:false, board:null, audioContext:null };
       let historyReady = false;
       let localParticipantsWerePresent = false;
@@ -1032,14 +1033,17 @@
         }catch(error){ console.warn('presentation_bell_failed',error); }
       }
 
-      function announcePresentationEnd(){
+      function announcePresentationMessage(message){
         if(!('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) return;
         try{
           window.speechSynthesis.cancel();
-          const utterance=new SpeechSynthesisUtterance(PRESENTATION_END_MESSAGE);
+          const utterance=new SpeechSynthesisUtterance(message);
           utterance.lang='ko-KR';
-          utterance.rate=1;
+          utterance.rate=.82;
           utterance.pitch=1;
+          utterance.volume=1;
+          const koreanVoice=window.speechSynthesis.getVoices().find(voice=>/^ko(-|_)/i.test(voice.lang));
+          if(koreanVoice) utterance.voice=koreanVoice;
           window.speechSynthesis.speak(utterance);
         }catch(error){ console.warn('presentation_announcement_failed',error); }
       }
@@ -1105,13 +1109,14 @@
             if(presentationTimer.remaining===60 && !presentationTimer.bellPlayed){
               presentationTimer.bellPlayed=true;
               playPresentationBell();
+              announcePresentationMessage(PRESENTATION_ONE_MINUTE_MESSAGE);
             }
             if(presentationTimer.remaining===0){
               clearInterval(presentationTimer.intervalId);
               presentationTimer.intervalId=null;
               presentationTimer.ended=true;
               renderPresentationTimer();
-              announcePresentationEnd();
+              announcePresentationMessage(PRESENTATION_END_MESSAGE);
               return;
             }
             renderPresentationTimer();
