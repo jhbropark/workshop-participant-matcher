@@ -368,9 +368,10 @@
       ];
 
       const IS_TEAM_DOMAIN = location.hostname === 'team.varis.kr';
-      const IS_TALK_DOMAIN = ['talk.varis.kr','talkwith.varis.kr','team.varis.kr'].includes(location.hostname);
+      const IS_DICE_DOMAIN = location.hostname === 'dice.varis.kr';
+      const IS_TALK_DOMAIN = ['talk.varis.kr','talkwith.varis.kr','team.varis.kr','dice.varis.kr'].includes(location.hostname);
       const IS_GROUP_DISCUSSION = ['talkwith.varis.kr','team.varis.kr'].includes(location.hostname);
-      const PROJECT_KEY = IS_GROUP_DISCUSSION ? (IS_TEAM_DOMAIN ? 'team-group' : 'talk-group') : 'talk-1on1';
+      const PROJECT_KEY = IS_DICE_DOMAIN ? 'dice-1on1' : IS_GROUP_DISCUSSION ? (IS_TEAM_DOMAIN ? 'team-group' : 'talk-group') : 'talk-1on1';
       const INTERVIEW_TOPICS = IS_TEAM_DOMAIN ? TEAM_DISCUSSION_TOPICS : IS_GROUP_DISCUSSION ? TALKWITH_DISCUSSION_TOPICS : IS_TALK_DOMAIN ? TALK_INTERVIEW_TOPICS : ONE_ON_ONE_TOPICS;
       app.classList.toggle('group-mode',IS_GROUP_DISCUSSION);
       document.title=IS_GROUP_DISCUSSION?'Workshop Group Discussion Matcher':'Workshop 1:1 Matcher';
