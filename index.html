@@ -989,9 +989,13 @@
       function drawPresentationOrder(){
         if(!participants.length) return;
         const byName=new Map(participants.map(person=>[person.name,person]));
-        const configuredRoster=participants.length===DICE_INTEREST_ORDER.length && DICE_INTEREST_ORDER.every(item=>byName.has(item.name));
-        const orderedPeople=configuredRoster ? DICE_INTEREST_ORDER.map(item=>byName.get(item.name)) : shuffle(participants);
-        if(!configuredRoster && orderedPeople.length>1 && currentPresentationOrder.length && orderedPeople[0].name===currentPresentationOrder[0]) [orderedPeople[0],orderedPeople[1]]=[orderedPeople[1],orderedPeople[0]];
+        const interestByName=new Map(DICE_INTEREST_ORDER.map(item=>[item.name,item]));
+        const interestOrderedPeople=DICE_INTEREST_ORDER.map(item=>byName.get(item.name)).filter(Boolean);
+        const unknownPeople=participants.filter(person=>!interestByName.has(person.name));
+        const hasInterestOrder=interestOrderedPeople.length>0;
+        const configuredRoster=hasInterestOrder && unknownPeople.length===0;
+        const orderedPeople=configuredRoster ? interestOrderedPeople : hasInterestOrder ? [...interestOrderedPeople,...shuffle(unknownPeople)] : shuffle(participants);
+        if(!hasInterestOrder && orderedPeople.length>1 && currentPresentationOrder.length && orderedPeople[0].name===currentPresentationOrder[0]) [orderedPeople[0],orderedPeople[1]]=[orderedPeople[1],orderedPeople[0]];
         currentPresentationOrder=orderedPeople.map(person=>person.name);
         const orderRecord='order::'+currentPresentationOrder.join(' > ');
         presentationOrders=[...presentationOrders,orderRecord].slice(-200);
@@ -1001,12 +1005,12 @@
         teamLayer.innerHTML='';
         const board=document.createElement('div');
         board.className='order-board';
-        const modeLabel=configuredRoster?'관심사 연결 순서':'무작위 순서';
-        board.innerHTML='<div class="order-board-title"><h2>발표 순서</h2><span>'+modeLabel+' · '+currentPresentationOrder.length+'명</span></div><div class="order-list">'+orderedPeople.map((person,index)=>{const meta=configuredRoster?DICE_INTEREST_ORDER[index]:{theme:'무작위 배치'};return '<div class="order-item"><span class="order-number">'+(index+1)+'</span><span><span class="order-name">'+escapeHtml(person.name)+'</span><small class="order-theme">'+escapeHtml(meta.theme)+'</small></span></div>';}).join('')+'</div><div class="order-notice"><p>발표는 정해진 순서에 따라 진행됩니다.</p><p>다음 발표자는 미리 포디움 옆 의자에서 대기해 주세요.</p><p class="notice-emphasis">* 발표자는 포디움에 준비된 노트북에서 발표 자료와 화면 송출 상태를 확인한 후, 직접 발표를 시작해 주시기 바랍니다.</p></div>';
+        const modeLabel=configuredRoster ? (participants.length===DICE_INTEREST_ORDER.length?'관심사 연결 순서':'관심사 연결 순서 · 일부 명단') : hasInterestOrder ? '관심사 우선 · 기타 무작위' : '무작위 순서';
+        board.innerHTML='<div class="order-board-title"><h2>발표 순서</h2><span>'+modeLabel+' · '+currentPresentationOrder.length+'명</span></div><div class="order-list">'+orderedPeople.map((person,index)=>{const meta=interestByName.get(person.name)||{theme:'무작위 배치'};return '<div class="order-item"><span class="order-number">'+(index+1)+'</span><span><span class="order-name">'+escapeHtml(person.name)+'</span><small class="order-theme">'+escapeHtml(meta.theme)+'</small></span></div>';}).join('')+'</div><div class="order-notice"><p>발표는 정해진 순서에 따라 진행됩니다.</p><p>다음 발표자는 미리 포디움 옆 의자에서 대기해 주세요.</p><p class="notice-emphasis">* 발표자는 포디움에 준비된 노트북에서 발표 자료와 화면 송출 상태를 확인한 후, 직접 발표를 시작해 주시기 바랍니다.</p></div>';
         teamLayer.appendChild(board);
         updateModeUI();
-        setSyncStatus((configuredRoster?'관심사 순서 ':'발표 순서 ') + presentationOrders.length + '회');
-        syncToSheets('presentation_order_created',configuredRoster?'interest_based_order':'random_order');
+        setSyncStatus((hasInterestOrder?'관심사 순서 ':'발표 순서 ') + presentationOrders.length + '회');
+        syncToSheets('presentation_order_created',hasInterestOrder?'interest_based_order':'random_order');
       }
       function matchParticipants(){
         if(IS_ORDER_DOMAIN){ drawPresentationOrder(); return; }
