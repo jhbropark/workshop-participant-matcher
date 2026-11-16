@@ -1,9 +1,10 @@
 const SPREADSHEET_ID = '1K9WbtUH3S-IsgXPeLDLhnN0yDyruh1ksfz7RicAfNb8';
-const ALLOWED_SOURCES = ['talk.varis.kr', 'talkwith.varis.kr', 'team.varis.kr'];
+const ALLOWED_SOURCES = ['talk.varis.kr', 'talkwith.varis.kr', 'team.varis.kr', 'dice.varis.kr'];
 const PROJECTS = {
   'talk.varis.kr': 'talk-1on1',
   'talkwith.varis.kr': 'talk-group',
   'team.varis.kr': 'team-group',
+  'dice.varis.kr': 'dice-1on1',
 };
 const SYNC_TOKEN = 'talk-varis-sync-v1';
 const SHEETS = {
