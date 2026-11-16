@@ -136,6 +136,10 @@
     .order-number{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--ink);color:#fff;font-size:13px;font-weight:700;flex:none;}
     .order-name{display:block;font-size:clamp(17px,2vw,22px);font-weight:600;letter-spacing:-.03em;}
     .order-theme{display:block;margin-top:4px;color:var(--muted);font-size:12px;letter-spacing:-.02em;}
+    .order-notice{margin-top:auto;padding-top:18px;border-top:1px solid var(--rule);color:var(--ink);font-size:14px;line-height:1.7;letter-spacing:-.025em;}
+    .order-notice p{margin:0;}
+    .order-notice p+p{margin-top:2px;}
+    .order-notice .notice-emphasis{margin-top:8px;font-size:13px;color:var(--muted);}
     @media(max-width:650px){.order-board{inset:5% 5%;gap:14px;padding:18px}.order-list{grid-template-columns:1fr}.order-item{min-height:52px}}
   </style>
 </head>
@@ -998,7 +1002,7 @@
         const board=document.createElement('div');
         board.className='order-board';
         const modeLabel=configuredRoster?'관심사 연결 순서':'무작위 순서';
-        board.innerHTML='<div class="order-board-title"><h2>발표 순서</h2><span>'+modeLabel+' · '+currentPresentationOrder.length+'명</span></div><div class="order-list">'+orderedPeople.map((person,index)=>{const meta=configuredRoster?DICE_INTEREST_ORDER[index]:{theme:'무작위 배치'};return '<div class="order-item"><span class="order-number">'+(index+1)+'</span><span><span class="order-name">'+escapeHtml(person.name)+'</span><small class="order-theme">'+escapeHtml(meta.theme)+'</small></span></div>';}).join('')+'</div>';
+        board.innerHTML='<div class="order-board-title"><h2>발표 순서</h2><span>'+modeLabel+' · '+currentPresentationOrder.length+'명</span></div><div class="order-list">'+orderedPeople.map((person,index)=>{const meta=configuredRoster?DICE_INTEREST_ORDER[index]:{theme:'무작위 배치'};return '<div class="order-item"><span class="order-number">'+(index+1)+'</span><span><span class="order-name">'+escapeHtml(person.name)+'</span><small class="order-theme">'+escapeHtml(meta.theme)+'</small></span></div>';}).join('')+'</div><div class="order-notice"><p>발표는 정해진 순서에 따라 진행됩니다.</p><p>다음 발표자는 미리 포디움 옆 의자에서 대기해 주세요.</p><p class="notice-emphasis">* 발표자는 포디움에 준비된 노트북에서 발표 자료와 화면 송출 상태를 확인한 후, 직접 발표를 시작해 주시기 바랍니다.</p></div>';
         teamLayer.appendChild(board);
         updateModeUI();
         setSyncStatus((configuredRoster?'관심사 순서 ':'발표 순서 ') + presentationOrders.length + '회');
