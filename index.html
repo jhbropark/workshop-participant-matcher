@@ -993,6 +993,7 @@
         presentationOrders=[...presentationOrders,orderRecord].slice(-200);
         writeJson(STORAGE_KEYS.activeHistory,presentationOrders);
         mode='matched';
+        if(IS_ORDER_DOMAIN) floatingLayer.style.visibility='hidden';
         teamLayer.innerHTML='';
         const board=document.createElement('div');
         board.className='order-board';
@@ -1083,7 +1084,7 @@
 
       function releaseParticipants(){
         hideInterviewTopic();
-        if(IS_ORDER_DOMAIN) currentPresentationOrder=[];
+        if(IS_ORDER_DOMAIN){ currentPresentationOrder=[]; floatingLayer.style.visibility='visible'; }
         mode='float'; teamLayer.innerHTML='';
         const {width,height}=bounds();
         participants.forEach(node=>{
