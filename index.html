@@ -514,7 +514,7 @@
       const PRESENTATION_DURATION_SECONDS = 7 * 60;
       const PRESENTATION_END_MESSAGE = '발표시간이 종료되었습니다.';
       const PRESENTATION_ONE_MINUTE_MESSAGE = '1분 남았습니다.';
-      const presentationTimer = { intervalId:null, remaining:PRESENTATION_DURATION_SECONDS, started:false, ended:false, bellPlayed:false, board:null, audioContext:null };
+      const presentationTimer = { intervalId:null, remaining:PRESENTATION_DURATION_SECONDS, started:false, ended:false, bellPlayed:false, board:null, audioContext:null, speechTimeoutId:null };
       let historyReady = false;
       let localParticipantsWerePresent = false;
       let participantsInitialized = false;
@@ -1033,19 +1033,24 @@
         }catch(error){ console.warn('presentation_bell_failed',error); }
       }
 
-      function announcePresentationMessage(message){
+      function announcePresentationMessage(message,delay=260){
         if(!('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) return;
         try{
+          if(presentationTimer.speechTimeoutId){ clearTimeout(presentationTimer.speechTimeoutId); presentationTimer.speechTimeoutId=null; }
           window.speechSynthesis.cancel();
-          const utterance=new SpeechSynthesisUtterance(message);
-          utterance.lang='ko-KR';
-          utterance.rate=.82;
-          utterance.pitch=1;
-          utterance.volume=1;
-          const koreanVoice=window.speechSynthesis.getVoices().find(voice=>/^ko(-|_)/i.test(voice.lang));
-          if(koreanVoice) utterance.voice=koreanVoice;
-          window.speechSynthesis.speak(utterance);
-        }catch(error){ console.warn('presentation_announcement_failed',error); }
+          window.speechSynthesis.getVoices();
+          presentationTimer.speechTimeoutId=window.setTimeout(()=>{
+            const utterance=new SpeechSynthesisUtterance(message);
+            utterance.lang='ko-KR';
+            utterance.rate=.82;
+            utterance.pitch=1;
+            utterance.volume=1;
+            const koreanVoice=window.speechSynthesis.getVoices().find(voice=>/^ko(-|_)/i.test(voice.lang));
+            if(koreanVoice) utterance.voice=koreanVoice;
+            presentationTimer.speechTimeoutId=null;
+            window.speechSynthesis.speak(utterance);
+          },delay);
+        }catch(error){ presentationTimer.speechTimeoutId=null; console.warn('presentation_announcement_failed',error); }
       }
 
       function renderPresentationTimer(){
@@ -1077,6 +1082,8 @@
       function resetPresentationTimer(){
         if(presentationTimer.intervalId){ clearInterval(presentationTimer.intervalId); presentationTimer.intervalId=null; }
         if(presentationTimer.audioContext){ try{ presentationTimer.audioContext.close(); }catch(error){} presentationTimer.audioContext=null; }
+        if(presentationTimer.speechTimeoutId){ clearTimeout(presentationTimer.speechTimeoutId); presentationTimer.speechTimeoutId=null; }
+        if('speechSynthesis' in window){ try{ window.speechSynthesis.cancel(); }catch(error){} }
         presentationTimer.remaining=PRESENTATION_DURATION_SECONDS;
         presentationTimer.started=false;
         presentationTimer.ended=false;
@@ -1095,6 +1102,7 @@
             presentationTimer.ended=false;
             presentationTimer.bellPlayed=false;
           }
+          if('speechSynthesis' in window) window.speechSynthesis.getVoices();
           const AudioContextClass=window.AudioContext||window.webkitAudioContext;
           if(AudioContextClass){
             try{
@@ -1109,14 +1117,14 @@
             if(presentationTimer.remaining===60 && !presentationTimer.bellPlayed){
               presentationTimer.bellPlayed=true;
               playPresentationBell();
-              announcePresentationMessage(PRESENTATION_ONE_MINUTE_MESSAGE);
+              announcePresentationMessage(PRESENTATION_ONE_MINUTE_MESSAGE,1300);
             }
             if(presentationTimer.remaining===0){
               clearInterval(presentationTimer.intervalId);
               presentationTimer.intervalId=null;
               presentationTimer.ended=true;
               renderPresentationTimer();
-              announcePresentationMessage(PRESENTATION_END_MESSAGE);
+              announcePresentationMessage(PRESENTATION_END_MESSAGE,320);
               return;
             }
             renderPresentationTimer();
