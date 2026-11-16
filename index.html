@@ -126,6 +126,16 @@
       .person{min-width:72px;min-height:52px;padding:10px 13px;} .shape-diamond{min-width:78px;}
     }
     @media (prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto !important;transition-duration:.01ms !important;}}
+  
+    .order-board{position:absolute;inset:8% 8%;display:flex;flex-direction:column;gap:18px;padding:clamp(18px,3vw,34px);border:1px solid var(--rule);background:rgba(255,255,255,.96);box-shadow:0 18px 50px rgba(32,35,38,.08);overflow:auto;}
+    .order-board-title{display:flex;align-items:baseline;justify-content:space-between;gap:12px;border-bottom:1px solid var(--soft-rule);padding-bottom:14px;}
+    .order-board-title h2{margin:0;font-size:clamp(22px,3vw,34px);font-weight:700;letter-spacing:-.04em;}
+    .order-board-title span{font-size:12px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;}
+    .order-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;}
+    .order-item{display:flex;align-items:center;gap:14px;min-height:58px;padding:12px 14px;border:1px solid var(--soft-rule);background:var(--paper-soft);}
+    .order-number{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--ink);color:#fff;font-size:13px;font-weight:700;flex:none;}
+    .order-name{font-size:clamp(17px,2vw,22px);font-weight:600;letter-spacing:-.03em;}
+    @media(max-width:650px){.order-board{inset:5% 5%;gap:14px;padding:18px}.order-list{grid-template-columns:1fr}.order-item{min-height:52px}}
   </style>
 </head>
 <body>
@@ -369,16 +379,23 @@
 
       const IS_TEAM_DOMAIN = location.hostname === 'team.varis.kr';
       const IS_DICE_DOMAIN = location.hostname === 'dice.varis.kr';
+      const IS_ORDER_DOMAIN = IS_DICE_DOMAIN;
       const IS_TALK_DOMAIN = ['talk.varis.kr','talkwith.varis.kr','team.varis.kr','dice.varis.kr'].includes(location.hostname);
       const IS_GROUP_DISCUSSION = ['talkwith.varis.kr','team.varis.kr'].includes(location.hostname);
       const PROJECT_KEY = IS_DICE_DOMAIN ? 'dice-1on1' : IS_GROUP_DISCUSSION ? (IS_TEAM_DOMAIN ? 'team-group' : 'talk-group') : 'talk-1on1';
-      const INTERVIEW_TOPICS = IS_TEAM_DOMAIN ? TEAM_DISCUSSION_TOPICS : IS_GROUP_DISCUSSION ? TALKWITH_DISCUSSION_TOPICS : IS_TALK_DOMAIN ? TALK_INTERVIEW_TOPICS : ONE_ON_ONE_TOPICS;
+      const INTERVIEW_TOPICS = IS_ORDER_DOMAIN ? [] : IS_TEAM_DOMAIN ? TEAM_DISCUSSION_TOPICS : IS_GROUP_DISCUSSION ? TALKWITH_DISCUSSION_TOPICS : IS_TALK_DOMAIN ? TALK_INTERVIEW_TOPICS : ONE_ON_ONE_TOPICS;
       app.classList.toggle('group-mode',IS_GROUP_DISCUSSION);
-      document.title=IS_GROUP_DISCUSSION?'Workshop Group Discussion Matcher':'Workshop 1:1 Matcher';
-      stage.setAttribute('aria-label',IS_GROUP_DISCUSSION?'참여자 조별 토론 공간':'참여자 매칭 공간');
-      onButton.textContent=IS_GROUP_DISCUSSION?'조 편성':'매칭';
-      rematch.textContent=IS_GROUP_DISCUSSION?'다시 조 편성':'다시';
-      rematch.setAttribute('aria-label',IS_GROUP_DISCUSSION?'다시 조 편성':'다시 매칭');
+      document.title=IS_ORDER_DOMAIN?'Workshop Presentation Order':IS_GROUP_DISCUSSION?'Workshop Group Discussion Matcher':'Workshop 1:1 Matcher';
+      stage.setAttribute('aria-label',IS_ORDER_DOMAIN?'발표 순서 공간':IS_GROUP_DISCUSSION?'참여자 조별 토론 공간':'참여자 매칭 공간');
+      onButton.textContent=IS_ORDER_DOMAIN?'발표 순서 뽑기':IS_GROUP_DISCUSSION?'조 편성':'매칭';
+      rematch.textContent=IS_ORDER_DOMAIN?'다시 뽑기':IS_GROUP_DISCUSSION?'다시 조 편성':'다시';
+      rematch.setAttribute('aria-label',IS_ORDER_DOMAIN?'발표 순서 다시 뽑기':IS_GROUP_DISCUSSION?'다시 조 편성':'다시 매칭');
+      if(IS_ORDER_DOMAIN){
+        topicPanel.hidden=true;
+        document.querySelector('.count')?.setAttribute('aria-label','참여자 수와 발표 순서 추첨 횟수');
+        resetMatchCount?.setAttribute('aria-label','발표 순서 추첨 횟수 초기화');
+        teamLayer?.setAttribute('aria-label','발표 순서 결과');
+      }
       const STORAGE_PREFIX = 'talk-' + PROJECT_KEY;
       const STORAGE_KEYS = {
         activeHistory: STORAGE_PREFIX + '-match-history-v3',
@@ -451,7 +468,9 @@
       let lastTime = performance.now();
       let resizeTimer = null;
       const storedActiveHistory=readJson(STORAGE_KEYS.activeHistory,[]);
-      let matchHistory = new Set(Array.isArray(storedActiveHistory) ? storedActiveHistory.filter(value=>typeof value==='string') : []);
+      let matchHistory = new Set(IS_ORDER_DOMAIN ? [] : (Array.isArray(storedActiveHistory) ? storedActiveHistory.filter(value=>typeof value==='string') : []));
+      let presentationOrders = IS_ORDER_DOMAIN && Array.isArray(storedActiveHistory) ? storedActiveHistory.filter(value=>typeof value==='string' && value.startsWith('order::')) : [];
+      let currentPresentationOrder = [];
       let historyReady = false;
       let localParticipantsWerePresent = false;
       let participantsInitialized = false;
@@ -517,7 +536,7 @@
       let syncQueue=Promise.resolve();
       function syncToSheets(event, reason='', archiveSnapshots=[]){
         if(!SYNC_ENDPOINT) return Promise.resolve();
-        const payload={source:location.hostname,projectKey:PROJECT_KEY,recordedAt:new Date().toISOString(),sessionId,event,reason,participants:participants.map(node=>({id:node.participantId,name:node.name})),activeHistory:[...matchHistory],archiveSnapshots,matchPresses,usedInterviewTopics,facilitatorCounts};
+        const payload={source:location.hostname,projectKey:PROJECT_KEY,recordedAt:new Date().toISOString(),sessionId,event,reason,participants:participants.map(node=>({id:node.participantId,name:node.name})),activeHistory:IS_ORDER_DOMAIN ? [...presentationOrders] : [...matchHistory],archiveSnapshots,matchPresses,usedInterviewTopics,facilitatorCounts};
         setSyncStatus('저장 중');
         const send=async()=>{
           try {
@@ -545,14 +564,22 @@
           const data = await response.json();
           if(!data.ok || !Array.isArray(data.pairs)) throw new Error('history_invalid');
           if(Array.isArray(data.participants) && data.participants.length && !localParticipantsWerePresent) setNames(data.participants);
-          data.pairs.filter(pair=>typeof pair==='string' && pair).map(migrateRemotePairKey).filter(Boolean).forEach(pair=>matchHistory.add(pair));
-          if(data.facilitatorCounts && typeof data.facilitatorCounts==='object' && Object.keys(facilitatorCounts).length===0){
-            facilitatorCounts=Object.fromEntries(Object.entries(data.facilitatorCounts).filter(([id,count])=>Number.isFinite(Number(count)) && Number(count)>=0).map(([id,count])=>[id,Number(count)]));
-            writeJson(STORAGE_KEYS.facilitatorCounts,facilitatorCounts);
+          if(IS_ORDER_DOMAIN){
+            data.pairs.filter(pair=>typeof pair==='string' && pair.startsWith('order::')).forEach(order=>{ if(!presentationOrders.includes(order)) presentationOrders.push(order); });
+            presentationOrders=presentationOrders.slice(-200);
+            writeJson(STORAGE_KEYS.activeHistory,presentationOrders);
+            historyReady=true;
+            setSyncStatus('순서 기록 ' + presentationOrders.length + '개 · 멤버 ' + participants.length + '명');
+          } else {
+            data.pairs.filter(pair=>typeof pair==='string' && pair).map(migrateRemotePairKey).filter(Boolean).forEach(pair=>matchHistory.add(pair));
+            if(data.facilitatorCounts && typeof data.facilitatorCounts==='object' && Object.keys(facilitatorCounts).length===0){
+              facilitatorCounts=Object.fromEntries(Object.entries(data.facilitatorCounts).filter(([id,count])=>Number.isFinite(Number(count)) && Number(count)>=0).map(([id,count])=>[id,Number(count)]));
+              writeJson(STORAGE_KEYS.facilitatorCounts,facilitatorCounts);
+            }
+            writeJson(STORAGE_KEYS.activeHistory,[...matchHistory]);
+            historyReady=true;
+            setSyncStatus('이력 ' + matchHistory.size + '개 · 멤버 ' + participants.length + '명');
           }
-          writeJson(STORAGE_KEYS.activeHistory,[...matchHistory]);
-          historyReady=true;
-          setSyncStatus('이력 ' + matchHistory.size + '개 · 멤버 ' + participants.length + '명');
         } catch(error) {
           historyReady=true;
           setSyncStatus(error?.name==='AbortError'?'이력 확인 시간 초과':'온라인 이력 확인 실패');
@@ -931,7 +958,27 @@
         updateModeUI();
       }
 
+      function drawPresentationOrder(){
+        if(!participants.length) return;
+        let order=shuffle(participants);
+        if(order.length>1 && currentPresentationOrder.length && order[0].name===currentPresentationOrder[0]) [order[0],order[1]]=[order[1],order[0]];
+        currentPresentationOrder=order.map(person=>person.name);
+        const orderRecord='order::'+currentPresentationOrder.join(' > ');
+        presentationOrders=[...presentationOrders,orderRecord].slice(-200);
+        writeJson(STORAGE_KEYS.activeHistory,presentationOrders);
+        mode='matched';
+        teamLayer.innerHTML='';
+        const board=document.createElement('div');
+        board.className='order-board';
+        board.innerHTML='<div class="order-board-title"><h2>발표 순서</h2><span>'+currentPresentationOrder.length+'명</span></div><div class="order-list">'+currentPresentationOrder.map((name,index)=>'<div class="order-item"><span class="order-number">'+(index+1)+'</span><span class="order-name">'+escapeHtml(name)+'</span></div>').join('')+'</div>';
+        teamLayer.appendChild(board);
+        updateModeUI();
+        setSyncStatus('발표 순서 ' + presentationOrders.length + '회');
+        syncToSheets('presentation_order_created','presentation_order_created');
+      }
+
       function matchParticipants(){
+        if(IS_ORDER_DOMAIN){ drawPresentationOrder(); return; }
         if(!IS_GROUP_DISCUSSION){ matchParticipantsInPairs(); return; }
         if(participants.length<2) return;
         showInterviewTopic(nextInterviewTopic());
@@ -990,15 +1037,16 @@
 
       function archiveAndResetState(){
         const previousSessionId=sessionId;
-        const snapshot={archiveId:`archive-${Date.now()}`,archivedAt:new Date().toISOString(),sessionId:previousSessionId,participants:participants.map(node=>({id:node.participantId,name:node.name})),history:[...matchHistory],matchPresses,topics:[...usedInterviewTopics],facilitatorCounts:{...facilitatorCounts},reason:'manual_reset'};
+        const snapshot={archiveId:`archive-${Date.now()}`,archivedAt:new Date().toISOString(),sessionId:previousSessionId,participants:participants.map(node=>({id:node.participantId,name:node.name})),history:IS_ORDER_DOMAIN ? [...presentationOrders] : [...matchHistory],matchPresses,topics:[...usedInterviewTopics],facilitatorCounts:{...facilitatorCounts},reason:'manual_reset'};
         historyArchive=[...historyArchive,snapshot].slice(-200);
         writeJson(STORAGE_KEYS.archiveHistory,historyArchive);
         matchHistory.clear();
+        if(IS_ORDER_DOMAIN) { presentationOrders=[]; currentPresentationOrder=[]; }
         matchPresses=0;
         usedInterviewTopics=[];
         facilitatorCounts={};
         rotateSessionId();
-        writeJson(STORAGE_KEYS.activeHistory,[]);
+        writeJson(STORAGE_KEYS.activeHistory,IS_ORDER_DOMAIN ? presentationOrders : []);
         writeJson(STORAGE_KEYS.matchPresses,0);
         writeJson(STORAGE_KEYS.interviewTopics,[]);
         writeJson(STORAGE_KEYS.facilitatorCounts,facilitatorCounts);
@@ -1009,6 +1057,7 @@
 
       function releaseParticipants(){
         hideInterviewTopic();
+        if(IS_ORDER_DOMAIN) currentPresentationOrder=[];
         mode='float'; teamLayer.innerHTML='';
         const {width,height}=bounds();
         participants.forEach(node=>{
