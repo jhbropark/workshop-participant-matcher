@@ -134,7 +134,8 @@
     .order-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;}
     .order-item{display:flex;align-items:center;gap:14px;min-height:58px;padding:12px 14px;border:1px solid var(--soft-rule);background:var(--paper-soft);}
     .order-number{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--ink);color:#fff;font-size:13px;font-weight:700;flex:none;}
-    .order-name{font-size:clamp(17px,2vw,22px);font-weight:600;letter-spacing:-.03em;}
+    .order-name{display:block;font-size:clamp(17px,2vw,22px);font-weight:600;letter-spacing:-.03em;}
+    .order-theme{display:block;margin-top:4px;color:var(--muted);font-size:12px;letter-spacing:-.02em;}
     @media(max-width:650px){.order-board{inset:5% 5%;gap:14px;padding:18px}.order-list{grid-template-columns:1fr}.order-item{min-height:52px}}
   </style>
 </head>
@@ -185,6 +186,29 @@
   <script>
     (() => {
       const DEFAULT_NAMES = ['철수','영희','James','Emma','佐藤','田中','Wáng','Liú'];
+      const DICE_INTEREST_ORDER = [
+        {name:'황종현',theme:'공간 구현·모델링'},
+        {name:'김재영',theme:'세계관·XR·관객 행동'},
+        {name:'박규상',theme:'몰입형 세계관·사운드·비주얼'},
+        {name:'진솔찬',theme:'공간 분위기·서사·조명'},
+        {name:'이소은',theme:'조명·공연·AR·VR'},
+        {name:'박경희',theme:'영상 타이밍·위로·휴식 공간'},
+        {name:'이해동',theme:'VR·언리얼·사운드 인터랙션'},
+        {name:'강유진',theme:'연기·몸·관객 참여'},
+        {name:'김민재',theme:'감정 시각화·음악·공간'},
+        {name:'허선미',theme:'그림·설치·인터랙션·의미'},
+        {name:'김유림',theme:'관객 행동·작품 변형'},
+        {name:'방현걸',theme:'직관적 인터랙션·관객 관계'},
+        {name:'이상옥',theme:'관객 데이터·UX 개입'},
+        {name:'김지은',theme:'공간 기획·동선·사용성'},
+        {name:'이수광',theme:'사운드·영상·공간 일관성'},
+        {name:'박성준',theme:'메시지·빛·사운드·데이터'},
+        {name:'이성호',theme:'음악·영상·뮤직비디오 디렉팅'},
+        {name:'문채이',theme:'영상·현장 감각·운영'},
+        {name:'오민지',theme:'드론·오디오비주얼·힐링 공간'},
+        {name:'박준형',theme:'사물 전환·공연·공동 놀이'}
+      ];
+      const DICE_DEFAULT_NAMES = DICE_INTEREST_ORDER.map(item=>item.name);
       const stage = document.getElementById('stage');
       const floatingLayer = document.getElementById('floatingLayer');
       const teamLayer = document.getElementById('teamLayer');
@@ -960,9 +984,11 @@
 
       function drawPresentationOrder(){
         if(!participants.length) return;
-        let order=shuffle(participants);
-        if(order.length>1 && currentPresentationOrder.length && order[0].name===currentPresentationOrder[0]) [order[0],order[1]]=[order[1],order[0]];
-        currentPresentationOrder=order.map(person=>person.name);
+        const byName=new Map(participants.map(person=>[person.name,person]));
+        const configuredRoster=participants.length===DICE_INTEREST_ORDER.length && DICE_INTEREST_ORDER.every(item=>byName.has(item.name));
+        const orderedPeople=configuredRoster ? DICE_INTEREST_ORDER.map(item=>byName.get(item.name)) : shuffle(participants);
+        if(!configuredRoster && orderedPeople.length>1 && currentPresentationOrder.length && orderedPeople[0].name===currentPresentationOrder[0]) [orderedPeople[0],orderedPeople[1]]=[orderedPeople[1],orderedPeople[0]];
+        currentPresentationOrder=orderedPeople.map(person=>person.name);
         const orderRecord='order::'+currentPresentationOrder.join(' > ');
         presentationOrders=[...presentationOrders,orderRecord].slice(-200);
         writeJson(STORAGE_KEYS.activeHistory,presentationOrders);
@@ -970,13 +996,13 @@
         teamLayer.innerHTML='';
         const board=document.createElement('div');
         board.className='order-board';
-        board.innerHTML='<div class="order-board-title"><h2>발표 순서</h2><span>'+currentPresentationOrder.length+'명</span></div><div class="order-list">'+currentPresentationOrder.map((name,index)=>'<div class="order-item"><span class="order-number">'+(index+1)+'</span><span class="order-name">'+escapeHtml(name)+'</span></div>').join('')+'</div>';
+        const modeLabel=configuredRoster?'관심사 연결 순서':'무작위 순서';
+        board.innerHTML='<div class="order-board-title"><h2>발표 순서</h2><span>'+modeLabel+' · '+currentPresentationOrder.length+'명</span></div><div class="order-list">'+orderedPeople.map((person,index)=>{const meta=configuredRoster?DICE_INTEREST_ORDER[index]:{theme:'무작위 배치'};return '<div class="order-item"><span class="order-number">'+(index+1)+'</span><span><span class="order-name">'+escapeHtml(person.name)+'</span><small class="order-theme">'+escapeHtml(meta.theme)+'</small></span></div>';}).join('')+'</div>';
         teamLayer.appendChild(board);
         updateModeUI();
-        setSyncStatus('발표 순서 ' + presentationOrders.length + '회');
-        syncToSheets('presentation_order_created','presentation_order_created');
+        setSyncStatus((configuredRoster?'관심사 순서 ':'발표 순서 ') + presentationOrders.length + '회');
+        syncToSheets('presentation_order_created',configuredRoster?'interest_based_order':'random_order');
       }
-
       function matchParticipants(){
         if(IS_ORDER_DOMAIN){ drawPresentationOrder(); return; }
         if(!IS_GROUP_DISCUSSION){ matchParticipantsInPairs(); return; }
@@ -1101,8 +1127,10 @@
       if(rematch) rematch.disabled=!IS_ORDER_DOMAIN;
       setSyncStatus('이력 확인 중');
       const storedParticipants=readJson(STORAGE_KEYS.participants,[]);
-      localParticipantsWerePresent=Array.isArray(storedParticipants) && storedParticipants.length > 0;
-      setNames(localParticipantsWerePresent ? storedParticipants : DEFAULT_NAMES);
+      const storedParticipantNames=Array.isArray(storedParticipants) ? storedParticipants.map(item=>typeof item==='string'?item:String(item?.name||'')).filter(Boolean) : [];
+      const legacyDiceSample=IS_ORDER_DOMAIN && storedParticipantNames.length===DEFAULT_NAMES.length && DEFAULT_NAMES.every(name=>storedParticipantNames.includes(name));
+      localParticipantsWerePresent=Array.isArray(storedParticipants) && storedParticipants.length > 0 && !legacyDiceSample;
+      setNames(localParticipantsWerePresent ? storedParticipants : (IS_ORDER_DOMAIN ? DICE_DEFAULT_NAMES : DEFAULT_NAMES));
       participantsInitialized=true;
       updateHistoryUI();
       loadRemoteHistory();
