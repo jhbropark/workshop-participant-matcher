@@ -2,6 +2,7 @@ const PROJECTS = {
   'talk.varis.kr': 'talk-1on1',
   'talkwith.varis.kr': 'talk-group',
   'team.varis.kr': 'team-group',
+  'dice.varis.kr': 'dice-1on1',
 };
 
 const endpoint = () => process.env.VARIS_SYNC_ENDPOINT;
